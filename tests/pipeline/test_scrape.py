@@ -159,7 +159,6 @@ async def test_first_run_derives_xpath_and_persists_items(
         assert run.status == "xpath_regenerated"
         assert run.items_seen == 3
         assert run.items_new == 3
-        assert run.raw_html == HTML_INITIAL
         assert run.xpath_extractor_id == feed.active_xpath_extractor_id
 
 
@@ -441,7 +440,6 @@ async def test_raw_html_written_to_disk_when_configured(
         async with pipeline_factory() as s:
             run = await s.get(ScrapeRun, outcome.scrape_run_id)
             assert run is not None
-            assert run.raw_html is None
             assert run.raw_html_path is not None
             stored = run.raw_html_path
 
@@ -455,36 +453,6 @@ async def test_raw_html_written_to_disk_when_configured(
     finally:
         get_settings.cache_clear()
 
-
-@pytest.mark.asyncio
-async def test_raw_html_skipped_when_dir_unset(
-    pipeline_factory: async_sessionmaker[AsyncSession],
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """When VEILLEUR_RAW_HTML_DIR is unset, no path is recorded and the in-DB column
-    is populated as before."""
-    from veilleur.config import get_settings
-
-    monkeypatch.delenv("VEILLEUR_RAW_HTML_DIR", raising=False)
-    get_settings.cache_clear()
-    try:
-        feed_id = await _make_feed(pipeline_factory)
-        scraper = FakePassePartout()
-        scraper.register("https://example.com/", html=HTML_INITIAL)
-        llm = FakeLLMClient([XPATH_GOOD])
-
-        outcome = await run_scrape(
-            feed_id, scraper=scraper, llm=llm, session_factory=pipeline_factory
-        )
-        assert outcome.error_message is None
-
-        async with pipeline_factory() as s:
-            run = await s.get(ScrapeRun, outcome.scrape_run_id)
-            assert run is not None
-            assert run.raw_html_path is None
-            assert run.raw_html == HTML_INITIAL
-    finally:
-        get_settings.cache_clear()
 
 @pytest.mark.asyncio
 async def test_lock_does_not_span_llm_call(

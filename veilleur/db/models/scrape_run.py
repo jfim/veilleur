@@ -55,7 +55,6 @@ class ScrapeRun(Base):
     )
     status: Mapped[str] = mapped_column(nullable=False)
     http_status: Mapped[int | None] = mapped_column(nullable=True)
-    raw_html: Mapped[str | None] = mapped_column(nullable=True)
     raw_html_path: Mapped[str | None] = mapped_column(nullable=True)
     items_seen: Mapped[int] = mapped_column(nullable=False, server_default=text("0"))
     items_new: Mapped[int] = mapped_column(nullable=False, server_default=text("0"))

@@ -154,6 +154,7 @@ async def _run(
             factory, run_id, feed_id, str(exc), http_status=None, raw_html=None
         )
 
+
     # --- 3. Extract anchors --------------------------------------------------
     try:
         anchors = extract_anchors(fetch.html, fetch.final_url)
@@ -484,9 +485,6 @@ async def _finalize_success(
         run.http_status = http_status
         if raw_html_path is not None:
             run.raw_html_path = raw_html_path
-            run.raw_html = None
-        else:
-            run.raw_html = raw_html
         if new_extractor_id is not None:
             run.xpath_extractor_id = new_extractor_id
 
@@ -521,9 +519,6 @@ async def _finalize_failure(
         run.http_status = http_status
         if raw_html_path is not None:
             run.raw_html_path = raw_html_path
-            run.raw_html = None
-        else:
-            run.raw_html = raw_html
 
         feed = await session.get(Feed, feed_id)
         assert feed is not None
