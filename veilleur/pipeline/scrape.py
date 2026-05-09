@@ -81,11 +81,18 @@ async def run_scrape(
     scraper: Scraper,
     llm: LLMClient,
     session_factory: async_sessionmaker[AsyncSession] | None = None,
+    force_regenerate: bool = False,
 ) -> ScrapeOutcome:
-    """Run a single scrape for ``feed_id``. Globally serialized."""
+    """Run a single scrape for ``feed_id``. Globally serialized.
+
+    ``force_regenerate=True`` bypasses any active xpath and asks the LLM
+    for a fresh expression. The previous-links validation step is skipped
+    (the user is explicitly asking for new behavior, so we can't expect
+    the new xpath to overlap with the old one).
+    """
     factory = session_factory or get_session_factory()
     async with _LOCK:
-        return await _run_locked(feed_id, scraper, llm, factory)
+        return await _run_locked(feed_id, scraper, llm, factory, force_regenerate)
 
 
 async def _run_locked(
@@ -93,6 +100,7 @@ async def _run_locked(
     scraper: Scraper,
     llm: LLMClient,
     factory: async_sessionmaker[AsyncSession],
+    force_regenerate: bool,
 ) -> ScrapeOutcome:
     # --- 1. Load feed + open scrape_run --------------------------------------
     async with factory() as session:
@@ -154,6 +162,22 @@ async def _run_locked(
     final_status = "success"
 
     prev_links: list[str] | None = await _load_prev_links(factory, feed_id)
+
+    if force_regenerate:
+        # Operator explicitly asked for a fresh xpath. Bypass the active
+        # xpath entirely and skip prev-links validation — the new xpath
+        # may legitimately match a different set of items than the old one.
+        return await _try_regenerate_or_fail(
+            factory=factory,
+            run_id=run_id,
+            feed_id=feed_id,
+            fetch=fetch,
+            anchors=anchors,
+            llm=llm,
+            prev_links=None,
+            reason="forced regeneration",
+            strict=False,
+        )
 
     if active_xpath is not None:
         try:
