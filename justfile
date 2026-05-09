@@ -21,6 +21,10 @@ typecheck:
 test:
     uv run pytest
 
+# Run live (network) tests (requires LLM_API_KEY, LLM_API_URL, LLM_MODEL_NAME)
+test-live:
+    uv run pytest -m live
+
 # Run dev server
 run:
     uv run uvicorn veilleur.app:app --reload

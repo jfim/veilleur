@@ -49,6 +49,10 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 # B008: FastAPI's `Depends(...)` in argument defaults is the standard idiom.
 ignore = ["B008"]
 
+[tool.ruff.lint.per-file-ignores]
+# Verbatim prompt template from rss-ify must not be reflowed.
+"veilleur/xpath/derive.py" = ["E501"]
+
 [tool.pyright]
 include = ["veilleur", "tests"]
 exclude = ["alembic/versions"]
@@ -56,7 +60,18 @@ pythonVersion = "3.12"
 typeCheckingMode = "strict"
 venvPath = "."
 venv = ".venv"
+# lxml ships no type stubs; relax untyped-import diagnostics.
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
+reportUnknownParameterType = false
+reportUnknownLambdaType = false
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "live: marks tests that hit a real LLM endpoint (deselect with '-m \"not live\"')",
+]
+addopts = "-m 'not live'"
