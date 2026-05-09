@@ -1,7 +1,8 @@
 """FastAPI application entry point for Veilleur.
 
-Phase 1 only exposes ``/healthz``; route modules will be mounted here as they
-land in later phases.
+Mounts ``/healthz`` (unauthenticated) and the bearer-token-protected REST
+API under ``/`` (Phase 6). RSS/Atom and Web UI routes will land in later
+phases.
 """
 
 from __future__ import annotations
@@ -12,9 +13,11 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from veilleur.api.routes import api_router
 from veilleur.db.session import get_session
 
 app = FastAPI(title="Veilleur", version="0.1.0")
+app.include_router(api_router)
 
 
 @app.get("/healthz")
