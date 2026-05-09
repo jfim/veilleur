@@ -67,6 +67,19 @@ XPATH_GOOD = "//main//article//h2/a"
 XPATH_RESTRUCTURED = "//div[@class='feed']//a"
 
 
+def _reply(intended_ids: list[int], xpath: str) -> str:
+    """Build a model reply matching the new derive_xpath two-line format."""
+    return f"articles: {','.join(str(i) for i in intended_ids)}\nxpath: {xpath}"
+
+
+# Anchor ids for HTML_INITIAL after filtering: About=1, Tags=2, post-a=3,
+# post-b=4, post-c=5. XPATH_GOOD matches the three post anchors.
+REPLY_GOOD = _reply([3, 4, 5], XPATH_GOOD)
+
+# HTML_RESTRUCTURED has only the three post anchors, ids 1, 2, 3.
+REPLY_RESTRUCTURED = _reply([1, 2, 3], XPATH_RESTRUCTURED)
+
+
 class FakeLLMClient:
     """Returns canned replies in order; raises when exhausted unless cycled."""
 
@@ -123,7 +136,7 @@ async def test_first_run_derives_xpath_and_persists_items(
     feed_id = await _make_feed(pipeline_factory)
     scraper = FakePassePartout()
     scraper.register("https://example.com/", html=HTML_INITIAL)
-    llm = FakeLLMClient([XPATH_GOOD])
+    llm = FakeLLMClient([REPLY_GOOD])
 
     outcome = await run_scrape(
         feed_id, scraper=scraper, llm=llm, session_factory=pipeline_factory
@@ -237,7 +250,7 @@ async def test_regenerate_when_xpath_breaks(
     # Second: page restructured, old xpath matches nothing, regenerate gets called.
     # (FakePassePartout.register overwrites)
     scraper.register("https://example.com/", html=HTML_RESTRUCTURED)
-    llm = FakeLLMClient([XPATH_RESTRUCTURED])
+    llm = FakeLLMClient([REPLY_RESTRUCTURED])
 
     second = await run_scrape(
         feed_id, scraper=scraper, llm=llm, session_factory=pipeline_factory
@@ -368,7 +381,8 @@ async def test_regeneration_fail_marks_feed_failed(
             "</div></body></html>"
         ),
     )
-    llm = FakeLLMClient(["//div[@class='feed']//a"])
+    # Page has 2 anchors → ids 1, 2; xpath matches both.
+    llm = FakeLLMClient([_reply([1, 2], "//div[@class='feed']//a")])
 
     outcome = await run_scrape(
         feed_id, scraper=scraper, llm=llm, session_factory=pipeline_factory
@@ -400,7 +414,7 @@ async def test_recovery_clears_failure_reason(
     good = await run_scrape(
         feed_id,
         scraper=scraper,
-        llm=FakeLLMClient([XPATH_GOOD]),
+        llm=FakeLLMClient([REPLY_GOOD]),
         session_factory=pipeline_factory,
     )
     assert good.error_message is None
@@ -430,7 +444,7 @@ async def test_raw_html_written_to_disk_when_configured(
         feed_id = await _make_feed(pipeline_factory)
         scraper = FakePassePartout()
         scraper.register("https://example.com/", html=HTML_INITIAL)
-        llm = FakeLLMClient([XPATH_GOOD])
+        llm = FakeLLMClient([REPLY_GOOD])
 
         outcome = await run_scrape(
             feed_id, scraper=scraper, llm=llm, session_factory=pipeline_factory
@@ -488,11 +502,11 @@ async def test_lock_does_not_span_llm_call(
             self.calls += 1
             # Wait for B's fetch to finish before letting A's LLM return.
             await asyncio.wait_for(b_fetch_done.wait(), timeout=5.0)
-            return XPATH_GOOD
+            return REPLY_GOOD
 
     class FastLLM:
         async def complete(self, prompt: str) -> str:
-            return XPATH_GOOD
+            return REPLY_GOOD
 
     slow = SlowLLM()
     fast = FastLLM()

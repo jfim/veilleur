@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     # File absence == use bundled default. See `veilleur.xpath.prompt`.
     VEILLEUR_PROMPT_FILE: Path | None = None
 
+    # Maximum LLM turns when deriving an xpath. Each turn the model proposes
+    # an xpath plus its intended id set; we run it and feed back the diff.
+    # The loop stops as soon as intended == actual, the model says ``unable``,
+    # or this cap is reached.
+    VEILLEUR_XPATH_MAX_ATTEMPTS: int = 3
+
     # Scrape defaults (consumed later)
     SCRAPE_DEFAULT_INTERVAL_SECONDS: int = 3600
     SCRAPE_HTTP_TIMEOUT_SECONDS: int = 60

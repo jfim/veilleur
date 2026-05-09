@@ -16,6 +16,7 @@ from veilleur.xpath.anchors import extract_anchors
 from veilleur.xpath.apply import apply_xpath
 from veilleur.xpath.derive import (
     PROMPT_TEMPLATE,
+    DerivationOutcome,
     HttpxLLMClient,
     derive_xpath,
     render_prompt,
@@ -27,6 +28,7 @@ from veilleur.xpath.types import (
     Item,
     LLMClient,
     LLMClientError,
+    XPathAttempt,
     XPathDerivationFailed,
     XPathNoMatchError,
     XPathSyntaxError,
@@ -38,8 +40,10 @@ __all__ = [
     # Types
     "Anchor",
     "AnchorExtractionResult",
+    "DerivationOutcome",
     "Item",
     "LLMClient",
+    "XPathAttempt",
     # Functions
     "extract_anchors",
     "derive_xpath",
