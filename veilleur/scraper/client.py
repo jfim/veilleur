@@ -211,8 +211,12 @@ class PassePartoutClient:
             raise PassePartoutProtocolError(
                 f"invalid JSON from POST /tabs: {response.text[:200]!r}"
             ) from exc
-        tab_id = body.get("id")
-        if not isinstance(tab_id, str) or not tab_id:
+        raw_id = body.get("id")
+        if isinstance(raw_id, int):
+            tab_id = str(raw_id)
+        elif isinstance(raw_id, str) and raw_id:
+            tab_id = raw_id
+        else:
             raise PassePartoutProtocolError(
                 f"missing/invalid 'id' in POST /tabs response: {body!r}"
             )

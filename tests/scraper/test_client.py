@@ -357,11 +357,10 @@ async def test_client_delete_failure_is_swallowed() -> None:
 
 def test_client_from_env_requires_url(monkeypatch: pytest.MonkeyPatch) -> None:
     """``client_from_env`` raises ``RuntimeError`` (not ``FetchError``) on missing URL."""
-    from veilleur.config import get_settings
+    from veilleur.config import Settings
     from veilleur.scraper import client_from_env
 
-    get_settings.cache_clear()
-    monkeypatch.delenv("PASSEPARTOUT_URL", raising=False)
+    fake = Settings.model_construct(PASSEPARTOUT_URL=None, PASSEPARTOUT_BEARER_TOKEN=None)
+    monkeypatch.setattr("veilleur.scraper.get_settings", lambda: fake)
     with pytest.raises(RuntimeError):
         client_from_env()
-    get_settings.cache_clear()

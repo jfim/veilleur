@@ -73,5 +73,6 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
     "live: marks tests that hit a real LLM endpoint (deselect with '-m \"not live\"')",
+    "integration: marks tests that hit a real passe-partout (deselect with '-m \"not integration\"')",
 ]
-addopts = "-m 'not live'"
+addopts = "-m 'not live and not integration'"
