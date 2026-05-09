@@ -7,8 +7,12 @@ The client drives passe-partout's stateful tab API:
 3. ``GET  /tabs/{id}/html`` reads the rendered HTML.
 4. ``DELETE /tabs/{id}`` cleans up (best-effort, in ``finally``).
 
-All four calls share a 30s overall budget enforced by ``asyncio.timeout``,
-and a per-instance ``asyncio.Lock`` ensures at most one in-flight fetch.
+The wait timeout we send to passe-partout is ``wait_timeout`` (default 30s).
+The overall local wall-clock budget is ``wait_timeout + max(0.2 * wait_timeout, 10)``
+so a remote networkidle timeout reaches us before we cancel locally; this
+matters because a local cancel produces only a best-effort partial, while a
+remote timeout returns gracefully and lets us read the final HTML. A
+per-instance ``asyncio.Lock`` ensures at most one in-flight fetch.
 """
 
 from __future__ import annotations
@@ -82,12 +86,18 @@ class PassePartoutClient:
         base_url: str,
         bearer_token: str | None = None,
         *,
-        timeout: float = 30.0,
+        wait_timeout: float = 30.0,
+        local_budget: float | None = None,
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self._base_url = base_url
         self._bearer_token = bearer_token or None
-        self._timeout = timeout
+        self._wait_timeout = wait_timeout
+        self._local_budget = (
+            local_budget
+            if local_budget is not None
+            else wait_timeout + max(0.2 * wait_timeout, 10.0)
+        )
         self._lock = asyncio.Lock()
         self._owns_client = http_client is None
         headers: dict[str, str] = {}
@@ -121,7 +131,7 @@ class PassePartoutClient:
         """Fetch ``url`` via passe-partout and return rendered HTML.
 
         Single-flight: at most one in-flight fetch per instance.
-        Total wall-clock budget: ``self._timeout`` (default 30s).
+        Total wall-clock budget: ``self._local_budget`` (wait timeout plus slack).
         """
         async with self._lock:
             # State the outer timeout handler needs in order to attempt the
@@ -133,7 +143,7 @@ class PassePartoutClient:
                 "final_url": url,
             }
             try:
-                async with asyncio.timeout(self._timeout):
+                async with asyncio.timeout(self._local_budget):
                     return await self._fetch_locked(url, state)
             except TimeoutError as exc:
                 tab_id = state["tab_id"]
@@ -148,7 +158,7 @@ class PassePartoutClient:
                     tab_id_str, started_f, status_code_i, final_url_s
                 )
                 raise FetchTimeout(
-                    f"fetch exceeded {self._timeout}s budget", partial=partial
+                    f"fetch exceeded {self._local_budget}s budget", partial=partial
                 ) from exc
 
     async def _fetch_locked(
@@ -170,10 +180,9 @@ class PassePartoutClient:
 
             started = state["started"]
             started_f = started if isinstance(started, float) else monotonic()
-            remaining_ms = max(1, int((self._timeout - (monotonic() - started_f)) * 1000))
             wait_resp = await self._http.post(
                 f"/tabs/{tab_id}/wait",
-                json={"network_idle": True, "timeout_ms": remaining_ms},
+                json={"network_idle": True, "timeout_ms": int(self._wait_timeout * 1000)},
             )
             self._handle_tab_response(wait_resp)
 
