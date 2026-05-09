@@ -27,7 +27,7 @@ test-live:
 
 # Run dev server
 run:
-    uv run uvicorn veilleur.app:app --reload
+    uv run uvicorn veilleur.app:app --reload --reload-dir veilleur --reload-exclude '.claude/*'
 
 # Lint + typecheck + test
 check: lint typecheck test
