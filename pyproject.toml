@@ -28,6 +28,8 @@ dev = [
     "httpx",
     "hypothesis>=6.152.4",
     "testcontainers[postgres]",
+    "pytest-recording>=0.13.4",
+    "respx>=0.23.1",
 ]
 
 [build-system]
