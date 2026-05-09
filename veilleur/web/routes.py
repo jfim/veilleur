@@ -164,6 +164,7 @@ async def feed_detail(
     runs_stmt = (
         select(ScrapeRun)
         .where(ScrapeRun.feed_id == feed_id)
+        .options(selectinload(ScrapeRun.xpath_extractor))
         .order_by(ScrapeRun.started_at.desc())
         .limit(20)
     )
@@ -299,4 +300,29 @@ async def scrape_feed_form(
     if exists.scalar_one() == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="feed not found")
     await run_scrape(feed_id, scraper=scraper, llm=llm)
+    return _redirect(str(request.url_for("feed_detail", feed_id=feed_id)))
+
+
+@web_router.post(
+    "/ui/feeds/{feed_id}/regenerate-xpath", name="regenerate_xpath_form"
+)
+async def regenerate_xpath_form(
+    feed_id: uuid.UUID,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    scraper: Scraper = Depends(get_scraper),
+    llm: LLMClient = Depends(get_llm_client),
+) -> Response:
+    """Force a fresh xpath derivation, bypassing the active extractor.
+
+    Useful when the active xpath looks valid syntactically but actually
+    matches the wrong set of items (e.g. only 2 of 50 because of a
+    substring mismatch). Reuses the normal scrape pipeline so a new
+    ``xpath_extractors`` row is created and ``feeds.active_xpath_extractor_id``
+    is switched on success.
+    """
+    exists = await session.execute(select(func.count()).where(Feed.id == feed_id))
+    if exists.scalar_one() == 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="feed not found")
+    await run_scrape(feed_id, scraper=scraper, llm=llm, force_regenerate=True)
     return _redirect(str(request.url_for("feed_detail", feed_id=feed_id)))

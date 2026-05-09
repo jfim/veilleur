@@ -19,7 +19,7 @@ import pytest_asyncio
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from veilleur.db.models import Feed, FeedItem, ScrapeRun
+from veilleur.db.models import Feed, FeedItem, ScrapeRun, XPathExtractor
 from veilleur.scraper import FakePassePartout
 
 from ..api.conftest import TEST_BEARER_TOKEN, StubLLMClient
@@ -375,6 +375,109 @@ async def test_scrape_form_unknown_feed_404(
 ) -> None:
     r = await web_client.post(f"/ui/feeds/{uuid.uuid4()}/scrape")
     assert r.status_code == 404
+
+
+# --- Regenerate xpath --------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_regenerate_xpath_form_replaces_active_extractor(
+    web_client: httpx.AsyncClient,
+    api_factory: async_sessionmaker[AsyncSession],
+    fake_scraper: FakePassePartout,
+    stub_llm: StubLLMClient,
+) -> None:
+    # Seed a feed with an existing (deliberately wrong) xpath, so we can
+    # verify that regenerate swaps in a new extractor row even though the
+    # existing one still parses cleanly.
+    async with api_factory() as s:
+        feed = Feed(url="https://example.com/", title="Example")
+        s.add(feed)
+        await s.flush()
+        old = XPathExtractor(
+            feed_id=feed.id,
+            xpath="//main//article//h2/a[contains(@href, '/wrong/')]",
+            generated_by="llm",
+            llm_model="stub",
+        )
+        s.add(old)
+        await s.flush()
+        feed.active_xpath_extractor_id = old.id
+        await s.commit()
+        feed_id = feed.id
+        old_id = old.id
+
+    fake_scraper.register("https://example.com/", html=HTML_BASIC)
+    stub_llm.queue(XPATH)
+
+    r = await web_client.post(f"/ui/feeds/{feed_id}/regenerate-xpath")
+    assert r.status_code == 303
+    assert r.headers["location"].endswith(f"/ui/feeds/{feed_id}")
+
+    async with api_factory() as s:
+        from sqlalchemy import select
+
+        refreshed = (
+            await s.execute(select(Feed).where(Feed.id == feed_id))
+        ).scalar_one()
+        assert refreshed.active_xpath_extractor_id is not None
+        assert refreshed.active_xpath_extractor_id != old_id
+
+        new_extractor = (
+            await s.execute(
+                select(XPathExtractor).where(
+                    XPathExtractor.id == refreshed.active_xpath_extractor_id
+                )
+            )
+        ).scalar_one()
+        assert new_extractor.xpath == XPATH
+
+        items = (
+            await s.execute(select(FeedItem).where(FeedItem.feed_id == feed_id))
+        ).scalars().all()
+        assert len(items) == 2
+
+        runs = (
+            await s.execute(select(ScrapeRun).where(ScrapeRun.feed_id == feed_id))
+        ).scalars().all()
+        assert len(runs) == 1
+        assert runs[0].status == "xpath_regenerated"
+
+
+@pytest.mark.asyncio
+async def test_regenerate_xpath_form_unknown_feed_404(
+    web_client: httpx.AsyncClient,
+    fake_scraper: FakePassePartout,
+    stub_llm: StubLLMClient,
+) -> None:
+    r = await web_client.post(f"/ui/feeds/{uuid.uuid4()}/regenerate-xpath")
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_feed_detail_shows_run_xpath(
+    web_client: httpx.AsyncClient,
+    api_factory: async_sessionmaker[AsyncSession],
+    fake_scraper: FakePassePartout,
+    stub_llm: StubLLMClient,
+) -> None:
+    async with api_factory() as s:
+        feed = Feed(url="https://example.com/", title="Example")
+        s.add(feed)
+        await s.commit()
+        feed_id = feed.id
+
+    fake_scraper.register("https://example.com/", html=HTML_BASIC)
+    stub_llm.queue(XPATH)
+
+    # Trigger a scrape to populate a run with an xpath_extractor row.
+    r = await web_client.post(f"/ui/feeds/{feed_id}/scrape")
+    assert r.status_code == 303
+
+    detail = await web_client.get(f"/ui/feeds/{feed_id}")
+    assert detail.status_code == 200
+    # The xpath should be visible inside the runs table cell.
+    assert XPATH in detail.text
 
 
 # --- Static files ------------------------------------------------------------

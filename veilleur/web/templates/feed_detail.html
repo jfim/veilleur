@@ -24,6 +24,10 @@
     <form method="post" action="{{ url_for('scrape_feed_form', feed_id=feed.id) }}">
         <button type="submit" class="primary">Scrape now</button>
     </form>
+    <form method="post" action="{{ url_for('regenerate_xpath_form', feed_id=feed.id) }}"
+          onsubmit="return confirm('Force a fresh xpath derivation? The current xpath will be replaced on success.');">
+        <button type="submit">Regenerate xpath</button>
+    </form>
     {% if feed.status == 'paused' %}
         <form method="post" action="{{ url_for('unpause_feed_form', feed_id=feed.id) }}">
             <button type="submit">Unpause</button>
@@ -99,6 +103,7 @@
             <th>Status</th>
             <th>Items seen</th>
             <th>Items new</th>
+            <th>XPath used</th>
             <th>Error</th>
         </tr>
     </thead>
@@ -111,6 +116,13 @@
             </td>
             <td>{{ run.items_seen }}</td>
             <td>{{ run.items_new }}</td>
+            <td>
+                {% if run.xpath_extractor %}
+                    <pre class="xpath">{{ run.xpath_extractor.xpath }}</pre>
+                {% else %}
+                    <span class="muted">—</span>
+                {% endif %}
+            </td>
             <td>
                 {% if run.error_message %}
                     <span class="failure-reason">{{ run.error_message }}</span>
