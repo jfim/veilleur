@@ -26,6 +26,7 @@ from .errors import (
     UnsupportedContentType,
 )
 from .fake import FakePassePartout
+from .raw_html_store import read_html, validate_raw_html_dir, write_html
 
 
 class Scraper(Protocol):
@@ -63,4 +64,7 @@ __all__ = [
     "Scraper",
     "UnsupportedContentType",
     "client_from_env",
+    "read_html",
+    "validate_raw_html_dir",
+    "write_html",
 ]

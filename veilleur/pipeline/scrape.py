@@ -37,6 +37,7 @@ from veilleur.scraper import (
     FetchResult,
     Scraper,
     UnsupportedContentType,
+    write_html,
 )
 from veilleur.xpath import (
     AnchorExtractionError,
@@ -434,15 +435,23 @@ async def _finalize_success(
     raw_html: str | None,
     new_extractor_id: uuid.UUID | None,
 ) -> None:
+    finished_at = datetime.now(UTC)
+    raw_html_path = _persist_raw_html(
+        feed_id=feed_id, run_id=run_id, when=finished_at, raw_html=raw_html
+    )
     async with factory() as session:
         run = await session.get(ScrapeRun, run_id)
         assert run is not None
         run.status = status
-        run.finished_at = datetime.now(UTC)
+        run.finished_at = finished_at
         run.items_seen = items_seen
         run.items_new = items_new
         run.http_status = http_status
-        run.raw_html = raw_html
+        if raw_html_path is not None:
+            run.raw_html_path = raw_html_path
+            run.raw_html = None
+        else:
+            run.raw_html = raw_html
         if new_extractor_id is not None:
             run.xpath_extractor_id = new_extractor_id
 
@@ -464,14 +473,22 @@ async def _finalize_failure(
     raw_html: str | None,
 ) -> ScrapeOutcome:
     logger.warning("scrape %s for feed %s failed: %s", run_id, feed_id, error_message)
+    finished_at = datetime.now(UTC)
+    raw_html_path = _persist_raw_html(
+        feed_id=feed_id, run_id=run_id, when=finished_at, raw_html=raw_html
+    )
     async with factory() as session:
         run = await session.get(ScrapeRun, run_id)
         assert run is not None
         run.status = "failed"
-        run.finished_at = datetime.now(UTC)
+        run.finished_at = finished_at
         run.error_message = error_message
         run.http_status = http_status
-        run.raw_html = raw_html
+        if raw_html_path is not None:
+            run.raw_html_path = raw_html_path
+            run.raw_html = None
+        else:
+            run.raw_html = raw_html
 
         feed = await session.get(Feed, feed_id)
         assert feed is not None
@@ -486,6 +503,45 @@ async def _finalize_failure(
         items_new=0,
         error_message=error_message,
     )
+
+
+def _persist_raw_html(
+    *,
+    feed_id: uuid.UUID,
+    run_id: uuid.UUID,
+    when: datetime,
+    raw_html: str | None,
+) -> str | None:
+    """Write ``raw_html`` to disk if storage is configured.
+
+    Returns the relative path to record on the scrape_run row, or ``None``
+    when there is nothing to persist (no html, or no configured storage).
+    Disk-write failures are logged and swallowed: a successful scrape must
+    not be downgraded to a failure because a debug artifact could not be
+    written.
+    """
+    if raw_html is None:
+        return None
+    from veilleur.config import get_settings
+
+    raw_html_dir = get_settings().VEILLEUR_RAW_HTML_DIR
+    if raw_html_dir is None:
+        return None
+    try:
+        return write_html(
+            raw_html_dir=raw_html_dir,
+            feed_id=feed_id,
+            run_id=run_id,
+            when=when,
+            html=raw_html,
+        )
+    except OSError:
+        logger.exception(
+            "failed to persist raw HTML for run %s under %s",
+            run_id,
+            raw_html_dir,
+        )
+        return None
 
 
 def _resolve_llm_model() -> str:

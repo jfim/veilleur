@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import gzip
 import uuid
 from collections import deque
+from pathlib import Path
 
 import pytest
 from sqlalchemy import select
@@ -410,4 +412,76 @@ async def test_recovery_clears_failure_reason(
         assert feed.status == "active"
         assert feed.last_failure_reason is None
 
+
+@pytest.mark.asyncio
+async def test_raw_html_written_to_disk_when_configured(
+    pipeline_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When VEILLEUR_RAW_HTML_DIR is set, raw HTML is gzipped to disk and only the path
+    is recorded on the scrape_run row."""
+    from veilleur.config import get_settings
+    from veilleur.scraper import read_html
+
+    monkeypatch.setenv("VEILLEUR_RAW_HTML_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    try:
+        feed_id = await _make_feed(pipeline_factory)
+        scraper = FakePassePartout()
+        scraper.register("https://example.com/", html=HTML_INITIAL)
+        llm = FakeLLMClient([XPATH_GOOD])
+
+        outcome = await run_scrape(
+            feed_id, scraper=scraper, llm=llm, session_factory=pipeline_factory
+        )
+        assert outcome.error_message is None
+
+        async with pipeline_factory() as s:
+            run = await s.get(ScrapeRun, outcome.scrape_run_id)
+            assert run is not None
+            assert run.raw_html is None
+            assert run.raw_html_path is not None
+            stored = run.raw_html_path
+
+        on_disk = tmp_path / stored
+        assert on_disk.exists()
+        with gzip.open(on_disk, "rb") as fh:
+            assert fh.read().decode("utf-8") == HTML_INITIAL
+
+        # And the public read_html helper roundtrips.
+        assert read_html(raw_html_dir=tmp_path, stored_path=stored) == HTML_INITIAL
+    finally:
+        get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_raw_html_skipped_when_dir_unset(
+    pipeline_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When VEILLEUR_RAW_HTML_DIR is unset, no path is recorded and the in-DB column
+    is populated as before."""
+    from veilleur.config import get_settings
+
+    monkeypatch.delenv("VEILLEUR_RAW_HTML_DIR", raising=False)
+    get_settings.cache_clear()
+    try:
+        feed_id = await _make_feed(pipeline_factory)
+        scraper = FakePassePartout()
+        scraper.register("https://example.com/", html=HTML_INITIAL)
+        llm = FakeLLMClient([XPATH_GOOD])
+
+        outcome = await run_scrape(
+            feed_id, scraper=scraper, llm=llm, session_factory=pipeline_factory
+        )
+        assert outcome.error_message is None
+
+        async with pipeline_factory() as s:
+            run = await s.get(ScrapeRun, outcome.scrape_run_id)
+            assert run is not None
+            assert run.raw_html_path is None
+            assert run.raw_html == HTML_INITIAL
+    finally:
+        get_settings.cache_clear()
 
