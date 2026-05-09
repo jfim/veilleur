@@ -10,7 +10,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        image: postgres:16-alpine
         env:
           POSTGRES_USER: veilleur
           POSTGRES_PASSWORD: veilleur
@@ -24,8 +24,11 @@ jobs:
           --health-retries 5
 
     env:
-      DATABASE_URL: postgresql+psycopg://veilleur:veilleur@localhost:5432/veilleur
-      VEILLEUR_DATABASE_URL: postgresql+psycopg://veilleur:veilleur@localhost:5432/veilleur
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: veilleur
+      POSTGRES_PASSWORD: veilleur
+      POSTGRES_DB: veilleur
 
     steps:
       - uses: actions/checkout@v4
@@ -47,6 +50,12 @@ jobs:
 
       - name: Typecheck
         run: just typecheck
+
+      - name: Apply migrations
+        run: just db-upgrade
+
+      - name: Alembic check (no schema drift)
+        run: just db-check
 
       - name: Test
         run: just test

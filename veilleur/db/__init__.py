@@ -1,6 +1,13 @@
-"""Database layer.
+"""Database layer: declarative base, engine, sessions, and ORM models."""
 
-Holds SQLAlchemy models, the engine/session factory, and Alembic migration
-glue. Persists feed definitions and the full history of extracted items so
-the REST API can serve historical entries beyond the latest scrape.
-"""
+from veilleur.db.base import Base
+from veilleur.db.ids import new_id
+from veilleur.db.session import get_engine, get_session, get_session_factory
+
+__all__ = [
+    "Base",
+    "get_engine",
+    "get_session",
+    "get_session_factory",
+    "new_id",
+]
