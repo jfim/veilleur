@@ -59,7 +59,7 @@ ignore = ["B008"]
 
 [tool.pyright]
 include = ["veilleur", "tests"]
-exclude = ["alembic/versions"]
+exclude = ["alembic/versions", ".claude/**"]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
 venvPath = "."
