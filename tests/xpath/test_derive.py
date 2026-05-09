@@ -67,6 +67,30 @@ async def test_strips_fences_with_xpath_tag() -> None:
     assert result == "//a[@class='post']"
 
 
+async def test_strips_thinking_block() -> None:
+    client = FakeLLMClient(
+        "<think>let me reason about this\nmulti-line</think>\n//a[@class='post']"
+    )
+    result = await derive_xpath("T", "u", SAMPLE_ANCHORS, client)
+    assert result == "//a[@class='post']"
+
+
+async def test_strips_thinking_block_preserves_no_extra_whitespace() -> None:
+    client = FakeLLMClient(
+        "<think>reasoning here</think>\n\n   //a[@class='post']  \n\n"
+    )
+    result = await derive_xpath("T", "u", SAMPLE_ANCHORS, client)
+    assert result == "//a[@class='post']"
+
+
+async def test_strips_thinking_block_with_fences() -> None:
+    client = FakeLLMClient(
+        "<thinking>step by step</thinking>\n```xpath\n//a[@class='post']\n```"
+    )
+    result = await derive_xpath("T", "u", SAMPLE_ANCHORS, client)
+    assert result == "//a[@class='post']"
+
+
 async def test_unable_lowercase_raises() -> None:
     client = FakeLLMClient("unable")
     with pytest.raises(XPathDerivationFailed):
