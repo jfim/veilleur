@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     SCRAPE_DEFAULT_INTERVAL_SECONDS: int = 3600
     SCRAPE_HTTP_TIMEOUT_SECONDS: int = 60
 
+    # LLM HTTP timeout — separate from scrape because thinking-style models
+    # routinely take minutes to return.
+    LLM_HTTP_TIMEOUT_SECONDS: int = 300
+
     # Phase 8 — scheduler
     SCHEDULER_ENABLED: bool = True
     SCHEDULER_TICK_SECONDS: float = 30.0

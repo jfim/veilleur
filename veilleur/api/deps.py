@@ -63,5 +63,5 @@ async def get_llm_client() -> LLMClient:
         raise LLMClientError(
             f"missing required environment variables: {', '.join(missing)}"
         )
-    http = httpx.AsyncClient(timeout=settings.SCRAPE_HTTP_TIMEOUT_SECONDS)
+    http = httpx.AsyncClient(timeout=settings.LLM_HTTP_TIMEOUT_SECONDS)
     return HttpxLLMClient(api_url=api_url, model=model, api_key=api_key, http=http)
