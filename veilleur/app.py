@@ -67,7 +67,7 @@ def _build_scheduler() -> tuple[SchedulerLoop, list[object]] | None:
         base_url=settings.PASSEPARTOUT_URL or "",
         bearer_token=pp_token,
     )
-    llm_http = httpx.AsyncClient(timeout=settings.SCRAPE_HTTP_TIMEOUT_SECONDS)
+    llm_http = httpx.AsyncClient(timeout=settings.LLM_HTTP_TIMEOUT_SECONDS)
     llm = HttpxLLMClient(
         api_url=settings.LLM_API_URL or "",
         model=settings.LLM_MODEL_NAME or "",
