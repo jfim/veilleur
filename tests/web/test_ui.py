@@ -12,6 +12,7 @@ import base64
 import os
 import uuid
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 import httpx
 import pytest
@@ -478,6 +479,78 @@ async def test_feed_detail_shows_run_xpath(
     assert detail.status_code == 200
     # The xpath should be visible inside the runs table cell.
     assert XPATH in detail.text
+
+
+# --- Prompt settings ---------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_prompt_settings_disabled_when_unset(
+    web_client: httpx.AsyncClient,
+) -> None:
+    from veilleur.config import get_settings
+
+    old = os.environ.pop("VEILLEUR_PROMPT_FILE", None)
+    get_settings.cache_clear()
+    try:
+        r = await web_client.get("/ui/settings/prompt")
+        assert r.status_code == 200
+        assert "is not configured" in r.text
+
+        save = await web_client.post(
+            "/ui/settings/prompt", data={"prompt": "anything"}
+        )
+        assert save.status_code == 409
+    finally:
+        if old is not None:
+            os.environ["VEILLEUR_PROMPT_FILE"] = old
+        get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_prompt_settings_save_and_reset(
+    web_client: httpx.AsyncClient,
+    tmp_path: Path,
+) -> None:
+    from veilleur.config import get_settings
+    from veilleur.xpath import prompt as xpath_prompt
+
+    target = tmp_path / "prompt.txt"
+    old = os.environ.get("VEILLEUR_PROMPT_FILE")
+    os.environ["VEILLEUR_PROMPT_FILE"] = str(target)
+    get_settings.cache_clear()
+    try:
+        r = await web_client.get("/ui/settings/prompt")
+        assert r.status_code == 200
+        assert "using bundled default" in r.text
+
+        custom = "CUSTOM-PROMPT {title} {url}\n{listing}\n"
+        save = await web_client.post(
+            "/ui/settings/prompt", data={"prompt": custom}
+        )
+        assert save.status_code == 200
+        assert target.read_text(encoding="utf-8") == custom
+        assert "Prompt saved" in save.text
+
+        revert = await web_client.post(
+            "/ui/settings/prompt",
+            data={"prompt": xpath_prompt.DEFAULT_PROMPT_TEMPLATE},
+        )
+        assert revert.status_code == 200
+        assert not target.exists()
+        assert "override file removed" in revert.text
+
+        xpath_prompt.save_template("override-again")
+        assert target.exists()
+        reset = await web_client.post("/ui/settings/prompt/reset")
+        assert reset.status_code == 303
+        assert not target.exists()
+    finally:
+        if old is None:
+            os.environ.pop("VEILLEUR_PROMPT_FILE", None)
+        else:
+            os.environ["VEILLEUR_PROMPT_FILE"] = old
+        get_settings.cache_clear()
 
 
 # --- Static files ------------------------------------------------------------

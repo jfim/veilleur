@@ -55,6 +55,7 @@ ignore = ["B008"]
 [tool.ruff.lint.per-file-ignores]
 # Verbatim prompt template from rss-ify must not be reflowed.
 "veilleur/xpath/derive.py" = ["E501"]
+"veilleur/xpath/prompt.py" = ["E501"]
 
 [tool.pyright]
 include = ["veilleur", "tests"]

@@ -33,6 +33,7 @@ from veilleur.pipeline import run_scrape
 from veilleur.scraper import Scraper
 from veilleur.web.auth import require_basic_auth
 from veilleur.xpath import LLMClient
+from veilleur.xpath import prompt as xpath_prompt
 
 # `__file__` lives in `veilleur/web/`, so static + templates are siblings.
 _PACKAGE_DIR = Path(__file__).resolve().parent
@@ -286,6 +287,58 @@ async def delete_feed_form(
     await session.delete(feed)
     await session.commit()
     return _redirect(str(request.url_for("index")))
+
+
+@web_router.get("/ui/settings/prompt", name="prompt_settings")
+async def prompt_settings(request: Request) -> HTMLResponse:
+    return _render(
+        request,
+        "prompt_settings.html",
+        {
+            "prompt_text": xpath_prompt.load_active_template(),
+            "default_text": xpath_prompt.DEFAULT_PROMPT_TEMPLATE,
+            "is_overridden": xpath_prompt.is_overridden(),
+            "override_path": xpath_prompt.prompt_override_path(),
+            "saved": False,
+            "reset": False,
+        },
+    )
+
+
+@web_router.post("/ui/settings/prompt", name="prompt_settings_save")
+async def prompt_settings_save(
+    request: Request,
+    prompt: str = Form(...),
+) -> HTMLResponse:
+    if xpath_prompt.prompt_override_path() is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="VEILLEUR_PROMPT_FILE is not configured; prompt edits are disabled",
+        )
+    overridden = xpath_prompt.save_template(prompt)
+    return _render(
+        request,
+        "prompt_settings.html",
+        {
+            "prompt_text": xpath_prompt.load_active_template(),
+            "default_text": xpath_prompt.DEFAULT_PROMPT_TEMPLATE,
+            "is_overridden": overridden,
+            "override_path": xpath_prompt.prompt_override_path(),
+            "saved": True,
+            "reset": not overridden,
+        },
+    )
+
+
+@web_router.post("/ui/settings/prompt/reset", name="prompt_settings_reset")
+async def prompt_settings_reset(request: Request) -> Response:
+    if xpath_prompt.prompt_override_path() is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="VEILLEUR_PROMPT_FILE is not configured; prompt edits are disabled",
+        )
+    xpath_prompt.reset_to_default()
+    return _redirect(str(request.url_for("prompt_settings")))
 
 
 @web_router.post("/ui/feeds/{feed_id}/scrape", name="scrape_feed_form")

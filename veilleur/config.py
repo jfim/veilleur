@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     # Phase 3 — declared here for parity, used later
     VEILLEUR_XPATH_MAX_ANCHORS: int = 250
 
+    # Optional override path for the xpath-derivation prompt template.
+    # File absence == use bundled default. See `veilleur.xpath.prompt`.
+    VEILLEUR_PROMPT_FILE: Path | None = None
+
     # Scrape defaults (consumed later)
     SCRAPE_DEFAULT_INTERVAL_SECONDS: int = 3600
     SCRAPE_HTTP_TIMEOUT_SECONDS: int = 60
