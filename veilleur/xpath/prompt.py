@@ -24,21 +24,23 @@ from pathlib import Path
 
 from veilleur.config import get_settings
 
-DEFAULT_PROMPT_TEMPLATE = """Given the following descriptive paths for links on a webpage, return an xpath expression that only matches links to articles. Do not return navigation links, tag/category links, or other irrelevant links, just links that appear to be an article so that the user can use them to build a RSS feed. The page is called {title} and is from {url}.
+DEFAULT_PROMPT_TEMPLATE = """Given the following links from a webpage, return an xpath expression that matches only links to articles. Ignore navigation, tag/category, pagination, and other non-article links — only links a reader would treat as an article, suitable for an RSS feed. The page is "{title}" from {url}.
 
-Each line below describes one ``<a>`` element. The path uses a CSS-like
-notation: ``tag#id`` when the element has an id, ``tag.class1.class2``
-when it has classes, ``tag#id.class`` when it has both, and ``tag[N]``
-(1-indexed among same-tag siblings) only when neither id nor class is
-available. Prefer xpath predicates that target ids and class names
-over positional indices when possible. The href is shown raw — if
-hrefs are relative (e.g. ``2025/post/index.html``), substring
-predicates like ``contains(@href, '/2025/')`` will NOT match them; use
-``starts-with(@href, '2025/')`` or class/id structure instead.
+Each line below describes one <a> element with a numeric id, a CSS-like descriptive path, the anchor text, and the raw href. The path uses `tag#id` when the element has an id, `tag.class1.class2` for classes, `tag#id.class` for both, and `tag[N]` (1-indexed among same-tag siblings) only when neither id nor class is available. Prefer xpath predicates that target ids and class names over positional indices.
 
+Hrefs are shown raw — relative hrefs like `2025/post/index.html` won't match `contains(@href, '/2025/')`; use `starts-with(@href, '2025/')` or key off structure (id/class) instead.
+
+Aim for an xpath specific enough not to match unrelated links added later, but loose enough to keep working as the page evolves. Prefer structural anchors (containers identified by id or class) and stable attribute predicates over volatile ones like year or month substrings or positional indices. For example, `//div[3]//a[contains(@href, '/2026/')]` will silently break after 2026 and is fragile to layout changes; `//div[contains(@class,'post-list')]//a[not(contains(@href, '/tags'))]` is more robust because it keys on a stable structural class and only excludes a known irrelevant section.
+
+Links:
 {listing}
+{previous_attempts}
+Reply with exactly two lines and nothing else — no commentary, no markdown, no code fences:
 
-Return only an xpath expression if you are able to match all of the articles and no other unwanted links, with no commentary or other messages, no markdown, no code fences, no backticks — just the raw xpath expression on a single line. If you are unable to write such an xpath expression, just write 'unable'.
+  articles: <comma-separated list of ids you intend to match>
+  xpath: <the xpath expression>
+
+If no xpath can match all article links and only article links, reply with the single word `unable` on its own line instead.
 """
 
 

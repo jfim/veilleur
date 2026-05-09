@@ -37,6 +37,8 @@ HTML_BASIC = """
 """
 
 XPATH = "//main//article//h2/a"
+# HTML_BASIC has 2 anchors → ids 1, 2; XPATH matches both.
+XPATH_REPLY = f"articles: 1,2\nxpath: {XPATH}"
 
 
 def _basic_auth_header(password: str = TEST_BEARER_TOKEN, user: str = "admin") -> str:
@@ -353,7 +355,7 @@ async def test_scrape_form_triggers_run(
         feed_id = feed.id
 
     fake_scraper.register("https://example.com/", html=HTML_BASIC)
-    stub_llm.queue(XPATH)
+    stub_llm.queue(XPATH_REPLY)
 
     r = await web_client.post(f"/ui/feeds/{feed_id}/scrape")
     assert r.status_code == 303
@@ -409,7 +411,7 @@ async def test_regenerate_xpath_form_replaces_active_extractor(
         old_id = old.id
 
     fake_scraper.register("https://example.com/", html=HTML_BASIC)
-    stub_llm.queue(XPATH)
+    stub_llm.queue(XPATH_REPLY)
 
     r = await web_client.post(f"/ui/feeds/{feed_id}/regenerate-xpath")
     assert r.status_code == 303
@@ -469,7 +471,7 @@ async def test_feed_detail_shows_run_xpath(
         feed_id = feed.id
 
     fake_scraper.register("https://example.com/", html=HTML_BASIC)
-    stub_llm.queue(XPATH)
+    stub_llm.queue(XPATH_REPLY)
 
     # Trigger a scrape to populate a run with an xpath_extractor row.
     r = await web_client.post(f"/ui/feeds/{feed_id}/scrape")

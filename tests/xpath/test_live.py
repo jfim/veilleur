@@ -39,9 +39,16 @@ async def test_live_the_batch_end_to_end() -> None:
 
     async with httpx.AsyncClient(timeout=120) as http:
         client = HttpxLLMClient.from_env(http)
-        xpath = await derive_xpath(extraction.title, base_url, extraction.anchors, client)
-    assert xpath
-    items = apply_xpath(html, base_url, xpath)
+        outcome = await derive_xpath(
+            extraction.title,
+            base_url,
+            extraction.anchors,
+            client,
+            root=extraction.root,
+            elements=extraction.elements,
+        )
+    assert outcome.xpath
+    items = apply_xpath(html, base_url, outcome.xpath)
     assert items
     for item in items:
         assert item.url.startswith("https://www.deeplearning.ai/the-batch/")

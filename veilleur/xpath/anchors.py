@@ -162,12 +162,14 @@ def extract_anchors(html: str, base_url: str) -> AnchorExtractionResult:
         title = "(untitled)"
 
     anchors: list[Anchor] = []
+    elements: list[lxml.html.HtmlElement] = []
     for a in root.xpath("//a"):
         href = a.get("href", "")
         if _is_useless_href(href):
             continue
         text = _normalize_text(a.text_content())
         anchors.append(Anchor(xpath=_build_descriptive_path(a), text=text, href=href))
+        elements.append(a)
 
     if not anchors:
         raise AnchorExtractionError("no usable anchors")
@@ -176,6 +178,7 @@ def extract_anchors(html: str, base_url: str) -> AnchorExtractionResult:
     total_before_cap = len(anchors)
     if total_before_cap > cap:
         anchors = anchors[:cap]
+        elements = elements[:cap]
         truncated = True
     else:
         truncated = False
@@ -185,4 +188,6 @@ def extract_anchors(html: str, base_url: str) -> AnchorExtractionResult:
         anchors=anchors,
         truncated=truncated,
         total_before_cap=total_before_cap,
+        root=root,
+        elements=tuple(elements),
     )

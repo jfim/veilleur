@@ -47,6 +47,7 @@ from veilleur.xpath import (
     AnchorExtractionResult,
     Item,
     LLMClient,
+    XPathAttempt,
     XPathDerivationFailed,
     XPathToolkitError,
     apply_xpath,
@@ -172,6 +173,7 @@ async def _run(
     items: list[Item]
     new_extractor_id: uuid.UUID | None = None
     final_status = "success"
+    derive_attempts_serialized: list[dict[str, object]] | None = None
 
     prev_links: list[str] | None = await _load_prev_links(factory, feed_id)
 
@@ -235,11 +237,13 @@ async def _run(
     else:
         # No active extractor — derive one.
         try:
-            new_xpath = await derive_xpath(
+            outcome = await derive_xpath(
                 anchors.title,
                 fetch.final_url,
                 anchors.anchors,
                 llm,
+                root=anchors.root,  # type: ignore[arg-type]
+                elements=anchors.elements,
             )
         except XPathDerivationFailed as exc:
             return await _finalize_failure(
@@ -249,7 +253,10 @@ async def _run(
                 f"xpath derivation failed: {exc}",
                 http_status=fetch.status_code,
                 raw_html=fetch.html,
+                xpath_attempts=None,
             )
+        new_xpath = outcome.xpath
+        derive_attempts: tuple[XPathAttempt, ...] = outcome.attempts
         try:
             items = apply_xpath(fetch.html, fetch.final_url, new_xpath)
         except XPathToolkitError as exc:
@@ -260,12 +267,14 @@ async def _run(
                 f"derived xpath unusable: {exc}",
                 http_status=fetch.status_code,
                 raw_html=fetch.html,
+                xpath_attempts=_serialize_attempts(derive_attempts),
             )
         # No prev_links to validate against on first run; accept items.
         new_extractor_id = await _persist_new_extractor(
             factory, feed_id, new_xpath, _resolve_llm_model()
         )
         final_status = "xpath_regenerated"
+        derive_attempts_serialized = _serialize_attempts(derive_attempts)
 
     # --- 6 + 7. Persist items + finalize -------------------------------------
     items_seen, items_new = await _persist_items(factory, feed_id, items, run_id)
@@ -279,6 +288,7 @@ async def _run(
         http_status=fetch.status_code,
         raw_html=fetch.html,
         new_extractor_id=new_extractor_id,
+        xpath_attempts=derive_attempts_serialized,
     )
     return ScrapeOutcome(
         scrape_run_id=run_id,
@@ -302,9 +312,15 @@ async def _try_regenerate_or_fail(
     strict: bool,
 ) -> ScrapeOutcome:
     """One regeneration attempt; on any failure mark the feed failed."""
+    attempts_serialized: list[dict[str, object]] | None = None
     try:
-        new_xpath = await derive_xpath(
-            anchors.title, fetch.final_url, anchors.anchors, llm
+        outcome = await derive_xpath(
+            anchors.title,
+            fetch.final_url,
+            anchors.anchors,
+            llm,
+            root=anchors.root,  # type: ignore[arg-type]
+            elements=anchors.elements,
         )
     except XPathDerivationFailed as exc:
         return await _finalize_failure(
@@ -314,7 +330,10 @@ async def _try_regenerate_or_fail(
             f"regenerate failed ({reason}): {exc}",
             http_status=fetch.status_code,
             raw_html=fetch.html,
+            xpath_attempts=None,
         )
+    new_xpath = outcome.xpath
+    attempts_serialized = _serialize_attempts(outcome.attempts)
     try:
         items = apply_xpath(fetch.html, fetch.final_url, new_xpath)
     except XPathToolkitError as exc:
@@ -325,6 +344,7 @@ async def _try_regenerate_or_fail(
             f"regenerated xpath unusable: {exc}",
             http_status=fetch.status_code,
             raw_html=fetch.html,
+            xpath_attempts=attempts_serialized,
         )
 
     if strict and prev_links is not None:
@@ -338,6 +358,7 @@ async def _try_regenerate_or_fail(
                 f"regenerated xpath still does not match: {reason_text}",
                 http_status=fetch.status_code,
                 raw_html=fetch.html,
+                xpath_attempts=attempts_serialized,
             )
 
     new_extractor_id = await _persist_new_extractor(
@@ -354,6 +375,7 @@ async def _try_regenerate_or_fail(
         http_status=fetch.status_code,
         raw_html=fetch.html,
         new_extractor_id=new_extractor_id,
+        xpath_attempts=attempts_serialized,
     )
     return ScrapeOutcome(
         scrape_run_id=run_id,
@@ -470,6 +492,7 @@ async def _finalize_success(
     http_status: int | None,
     raw_html: str | None,
     new_extractor_id: uuid.UUID | None,
+    xpath_attempts: list[dict[str, object]] | None = None,
 ) -> None:
     finished_at = datetime.now(UTC)
     raw_html_path = _persist_raw_html(
@@ -487,6 +510,8 @@ async def _finalize_success(
             run.raw_html_path = raw_html_path
         if new_extractor_id is not None:
             run.xpath_extractor_id = new_extractor_id
+        if xpath_attempts is not None:
+            run.xpath_attempts = xpath_attempts
 
         feed = await session.get(Feed, feed_id)
         assert feed is not None
@@ -504,6 +529,7 @@ async def _finalize_failure(
     *,
     http_status: int | None,
     raw_html: str | None,
+    xpath_attempts: list[dict[str, object]] | None = None,
 ) -> ScrapeOutcome:
     logger.warning("scrape %s for feed %s failed: %s", run_id, feed_id, error_message)
     finished_at = datetime.now(UTC)
@@ -519,6 +545,8 @@ async def _finalize_failure(
         run.http_status = http_status
         if raw_html_path is not None:
             run.raw_html_path = raw_html_path
+        if xpath_attempts is not None:
+            run.xpath_attempts = xpath_attempts
 
         feed = await session.get(Feed, feed_id)
         assert feed is not None
@@ -572,6 +600,31 @@ def _persist_raw_html(
             raw_html_dir,
         )
         return None
+
+
+def _serialize_attempts(
+    attempts: tuple[XPathAttempt, ...],
+) -> list[dict[str, object]] | None:
+    """Render xpath-derivation attempts as JSON-serializable dicts.
+
+    Returns ``None`` for empty traces so the column stays NULL when the
+    loop didn't run (rather than persisting an empty array).
+    """
+    if not attempts:
+        return None
+    return [
+        {
+            "turn": a.turn,
+            "xpath": a.xpath,
+            "intended_ids": list(a.intended_ids),
+            "actual_ids": list(a.actual_ids),
+            "extras_outside_listing": a.extras_outside_listing,
+            "parse_error": a.parse_error,
+            "unable": a.unable,
+            "ok": a.ok,
+        }
+        for a in attempts
+    ]
 
 
 def _resolve_llm_model() -> str:

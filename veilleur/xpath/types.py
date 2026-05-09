@@ -123,12 +123,52 @@ class AnchorExtractionResult:
         truncated: ``True`` if anchors were truncated by the cap.
         total_before_cap: Count of anchors after filtering, before the
             cap was applied (always ``>= len(anchors)``).
+        root: The parsed lxml HTML root, kept so the iterative
+            :func:`derive_xpath` loop can re-run candidate xpaths
+            against the same tree without reparsing.
+        elements: One lxml element per entry in ``anchors``, in the same
+            order. Used by the iterative loop to map matched elements
+            back to numeric ids by Python ``id()``.
     """
 
     title: str
     anchors: list[Anchor]
     truncated: bool
     total_before_cap: int
+    root: object | None = None
+    elements: tuple[object, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class XPathAttempt:
+    """One turn of the iterative xpath-derivation loop.
+
+    Attributes:
+        turn: 1-indexed turn number.
+        xpath: The xpath the model proposed (``None`` if the reply did
+            not parse).
+        intended_ids: Anchor ids the model said it intended to match
+            (``()`` if not parsed).
+        actual_ids: Anchor ids the proposed xpath actually matched
+            (``()`` if the xpath was unparseable / not run).
+        extras_outside_listing: Count of matched elements that were not
+            in the anchor listing (e.g. filtered-out anchors or non-``<a>``
+            elements).
+        parse_error: If the reply could not be parsed as the expected
+            ``articles: ... / xpath: ...`` block, the human-readable reason.
+        unable: ``True`` if the model replied ``unable``.
+        ok: ``True`` if intended_ids == actual_ids and the xpath ran
+            cleanly; the loop stops here.
+    """
+
+    turn: int
+    xpath: str | None
+    intended_ids: tuple[int, ...]
+    actual_ids: tuple[int, ...]
+    extras_outside_listing: int
+    parse_error: str | None
+    unable: bool
+    ok: bool
 
 
 class LLMClient(Protocol):

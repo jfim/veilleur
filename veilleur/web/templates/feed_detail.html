@@ -122,6 +122,35 @@
                 {% else %}
                     <span class="muted">—</span>
                 {% endif %}
+                {% if run.xpath_attempts %}
+                <details class="xpath-attempts">
+                    <summary>{{ run.xpath_attempts|length }} derivation attempt(s)</summary>
+                    <ol>
+                    {% for a in run.xpath_attempts %}
+                        <li>
+                            {% if a.unable %}
+                                <em>model replied <code>unable</code></em>
+                            {% elif a.parse_error %}
+                                <em>parse error: {{ a.parse_error }}</em>
+                            {% else %}
+                                <pre class="xpath">{{ a.xpath }}</pre>
+                                <span class="muted">intended:</span>
+                                {{ a.intended_ids|join(',') if a.intended_ids else '(none)' }}
+                                &nbsp;
+                                <span class="muted">matched:</span>
+                                {{ a.actual_ids|join(',') if a.actual_ids else '(none)' }}
+                                {% if a.extras_outside_listing %}
+                                    + {{ a.extras_outside_listing }} outside listing
+                                {% endif %}
+                                {% if a.ok %}
+                                    <strong>✓ ok</strong>
+                                {% endif %}
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                    </ol>
+                </details>
+                {% endif %}
             </td>
             <td>
                 {% if run.error_message %}

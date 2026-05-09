@@ -151,13 +151,31 @@ GPT_OSS_XPATH = "//a[contains(@href, '/posts/')]"
 
 
 class _FixedLLMClient:
-    def __init__(self, xpath: str) -> None:
+    """Returns the same xpath every call, wrapped in the new two-line format.
+
+    The intended-id list is derived from the prompt so the loop validates
+    cleanly: we look for ``id=N | ... href=`` lines and pick those whose
+    href matches a hard-coded substring (here ``/posts/``).
+    """
+
+    def __init__(self, xpath: str, *, href_substring: str = "/posts/") -> None:
         self._xpath = xpath
+        self._href_substring = href_substring
         self.calls = 0
 
     async def complete(self, prompt: str) -> str:
         self.calls += 1
-        return self._xpath
+        ids: list[int] = []
+        for line in prompt.splitlines():
+            if not line.startswith("id="):
+                continue
+            # Format: id=N | path | text='...' | href=...
+            if self._href_substring in line.split("href=", 1)[-1]:
+                try:
+                    ids.append(int(line[3:].split(" ", 1)[0]))
+                except (ValueError, IndexError):
+                    continue
+        return f"articles: {','.join(str(i) for i in ids)}\nxpath: {self._xpath}"
 
 
 @pytest.mark.integration

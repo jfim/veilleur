@@ -27,6 +27,8 @@ HTML_BASIC = """
 """
 
 XPATH = "//main//article//h2/a"
+# HTML_BASIC has 2 anchors → ids 1, 2; XPATH matches both.
+XPATH_REPLY = f"articles: 1,2\nxpath: {XPATH}"
 
 
 # --- Auth --------------------------------------------------------------------
@@ -323,7 +325,7 @@ async def test_trigger_scrape_first_run_derives_xpath(
     feed_id = uuid.UUID(r.json()["id"])
 
     fake_scraper.register("https://example.com/", html=HTML_BASIC)
-    stub_llm.queue(XPATH)
+    stub_llm.queue(XPATH_REPLY)
 
     r = await api_client.post(f"/feeds/{feed_id}/scrape")
     assert r.status_code == 202, r.text
