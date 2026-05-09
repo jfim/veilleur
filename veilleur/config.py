@@ -8,6 +8,7 @@ table of variables.
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -59,6 +60,12 @@ class Settings(BaseSettings):
     # Phase 8 — scheduler
     SCHEDULER_ENABLED: bool = True
     SCHEDULER_TICK_SECONDS: float = 30.0
+
+    # Filesystem storage for raw fetched HTML.
+    # When unset (the default), raw HTML is not persisted anywhere.
+    # When set, must be an absolute, writable directory; the scraper writes
+    # ``{raw_html_dir}/{feed_uuid}/{year}/{month}/{ts}-{run_short}.html.gz``.
+    VEILLEUR_RAW_HTML_DIR: Path | None = None
 
     @property
     def database_url_async(self) -> str:
