@@ -15,8 +15,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from veilleur.api.routes import api_router
 from veilleur.db.session import get_session
+from veilleur.feeds import feeds_public_router
 
 app = FastAPI(title="Veilleur", version="0.1.0")
+# Public RSS/Atom routes must be registered *before* the bearer-protected
+# router so that overlapping paths (e.g. ``/feeds/{id}/rss``) match the
+# unauthenticated handler first.
+app.include_router(feeds_public_router)
 app.include_router(api_router)
 
 
