@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     SCRAPE_DEFAULT_INTERVAL_SECONDS: int = 3600
     SCRAPE_HTTP_TIMEOUT_SECONDS: int = 60
 
+    # Phase 8 — scheduler
+    SCHEDULER_ENABLED: bool = True
+    SCHEDULER_TICK_SECONDS: float = 30.0
+
     @property
     def database_url_async(self) -> str:
         pw = self.POSTGRES_PASSWORD.get_secret_value()
