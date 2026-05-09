@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import gzip
 import uuid
 from collections import deque
@@ -484,4 +485,69 @@ async def test_raw_html_skipped_when_dir_unset(
             assert run.raw_html == HTML_INITIAL
     finally:
         get_settings.cache_clear()
+
+@pytest.mark.asyncio
+async def test_lock_does_not_span_llm_call(
+    pipeline_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A slow LLM call on one feed must not block another feed's fetch.
+
+    The pipeline lock should cover only the passe-partout fetch; the LLM call
+    runs without holding it. We arrange feed A's LLM call to block until
+    feed B's fetch has happened — if the lock spanned the LLM call, this
+    would deadlock.
+    """
+    feed_a = await _make_feed(
+        pipeline_factory, url="https://a.example.com/", title="A"
+    )
+    feed_b = await _make_feed(
+        pipeline_factory, url="https://b.example.com/", title="B"
+    )
+
+    scraper = FakePassePartout()
+    scraper.register("https://a.example.com/", html=HTML_INITIAL)
+    scraper.register("https://b.example.com/", html=HTML_INITIAL)
+
+    b_fetch_done = asyncio.Event()
+
+    class SlowLLM:
+        """Returns XPATH_GOOD for feed A, but only after feed B has fetched."""
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def complete(self, prompt: str) -> str:
+            self.calls += 1
+            # Wait for B's fetch to finish before letting A's LLM return.
+            await asyncio.wait_for(b_fetch_done.wait(), timeout=5.0)
+            return XPATH_GOOD
+
+    class FastLLM:
+        async def complete(self, prompt: str) -> str:
+            return XPATH_GOOD
+
+    slow = SlowLLM()
+    fast = FastLLM()
+
+    async def run_a() -> None:
+        await run_scrape(
+            feed_a, scraper=scraper, llm=slow, session_factory=pipeline_factory
+        )
+
+    async def run_b() -> None:
+        # Give A a moment to enter its LLM call first.
+        await asyncio.sleep(0.05)
+        try:
+            await run_scrape(
+                feed_b, scraper=scraper, llm=fast, session_factory=pipeline_factory
+            )
+        finally:
+            b_fetch_done.set()
+
+    # If the lock spanned the LLM call, A would block in its LLM, B would
+    # block on the lock, and asyncio.wait_for inside SlowLLM would time out.
+    await asyncio.wait_for(asyncio.gather(run_a(), run_b()), timeout=10.0)
+
+    assert "https://a.example.com/" in scraper.calls
+    assert "https://b.example.com/" in scraper.calls
 

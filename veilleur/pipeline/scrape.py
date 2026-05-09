@@ -13,8 +13,11 @@
    and update the feed's ``status`` / ``last_failure_reason`` /
    ``last_scraped_at``.
 
-Concurrency: a process-wide :class:`asyncio.Lock` serializes all calls so
-we never open more than one passe-partout tab at a time.
+Concurrency: a process-wide :class:`asyncio.Lock` serializes only the
+passe-partout interaction (``scraper.fetch``) so we never open more than
+one tab at a time. The LLM call, parsing, validation, and DB writes run
+outside the lock so a slow ``derive_xpath`` on one feed doesn't block
+other feeds from starting their fetch.
 """
 
 from __future__ import annotations
@@ -60,7 +63,13 @@ from veilleur.xpath.validation import (
 
 logger = logging.getLogger(__name__)
 
-_LOCK = asyncio.Lock()
+_FETCH_LOCK = asyncio.Lock()
+
+
+async def _locked_fetch(scraper: Scraper, url: str) -> FetchResult:
+    """Acquire the global passe-partout lock for the duration of one fetch."""
+    async with _FETCH_LOCK:
+        return await scraper.fetch(url)
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,7 +92,10 @@ async def run_scrape(
     session_factory: async_sessionmaker[AsyncSession] | None = None,
     force_regenerate: bool = False,
 ) -> ScrapeOutcome:
-    """Run a single scrape for ``feed_id``. Globally serialized.
+    """Run a single scrape for ``feed_id``.
+
+    Only the passe-partout fetch is serialized via a process-wide lock; the
+    LLM call, parsing, validation, and DB writes run without the lock.
 
     ``force_regenerate=True`` bypasses any active xpath and asks the LLM
     for a fresh expression. The previous-links validation step is skipped
@@ -91,11 +103,10 @@ async def run_scrape(
     the new xpath to overlap with the old one).
     """
     factory = session_factory or get_session_factory()
-    async with _LOCK:
-        return await _run_locked(feed_id, scraper, llm, factory, force_regenerate)
+    return await _run(feed_id, scraper, llm, factory, force_regenerate)
 
 
-async def _run_locked(
+async def _run(
     feed_id: uuid.UUID,
     scraper: Scraper,
     llm: LLMClient,
@@ -131,9 +142,9 @@ async def _run_locked(
             else None
         )
 
-    # --- 2. Fetch ------------------------------------------------------------
+    # --- 2. Fetch (single-flight via _FETCH_LOCK) ----------------------------
     try:
-        fetch = await scraper.fetch(feed_url)
+        fetch = await _locked_fetch(scraper, feed_url)
     except UnsupportedContentType as exc:
         return await _finalize_failure(
             factory, run_id, feed_id, str(exc), http_status=None, raw_html=None
