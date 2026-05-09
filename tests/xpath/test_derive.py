@@ -125,7 +125,7 @@ async def test_prompt_includes_canonical_template_text() -> None:
     client = FakeLLMClient("//a")
     await derive_xpath("Title X", "https://x.example/", SAMPLE_ANCHORS, client)
     prompt = client.prompts[0]
-    assert prompt.startswith("Given the following xpath absolute paths")
+    assert prompt.startswith("Given the following descriptive paths")
     assert "Title X" in prompt
     assert "https://x.example/" in prompt
     assert "single line" in prompt
