@@ -16,6 +16,8 @@ Main features:
     eg. if the previous run had example.com/posts/2026/mypost.html and example.com/posts/2026/another.html, the prefix used for comparison is example.com/posts/ (excluding the numeric part)
 	This ensures that if the xpath expression matches new URL schemes like say example.com/something.html we can detect the xpath failure to work correctly
 	If the new links don't match, regenerate an xpath expression, success if all links match previous ones or new links also match the correct prefix, fail if we get no matches or links that don't match the previous prefix
+- Veilleur uses passe-partout's stateful tab flow (https://github.com/jfim/passe-partout) for fetching webpages and uses a wait for networkidle as part of the page flow. Only one page is fetched at a time (no parallelism/concurrency) and it does not use requests or other libraries to fetch webpages, it only uses HTTP libraries to talk to passe-partout
+- HTML parsing should be robust against malformed HTML, pick a library that makes sense for this, maybe lxml.html.parse?
 
 Dev setup:
 - Use uv for package management (eg `uv init`)
