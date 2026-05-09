@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Prompt — Veilleur{% endblock %}
+
+{% block content %}
+<p><a href="{{ url_for('index') }}">&larr; Feeds</a></p>
+
+<h2>XPath-derivation prompt</h2>
+
+{% if override_path is none %}
+    <p class="muted">
+        Prompt editing is disabled because <code>VEILLEUR_PROMPT_FILE</code>
+        is not configured. Set it to a writable path (typically inside a
+        Docker volume) and restart to enable overrides.
+    </p>
+    <p class="muted">The bundled default is shown below for reference.</p>
+{% else %}
+    <p class="muted">
+        Override file: <code>{{ override_path }}</code>
+        — currently
+        {% if is_overridden %}
+            <strong>active override</strong>.
+        {% else %}
+            <strong>using bundled default</strong> (no override file present).
+        {% endif %}
+    </p>
+{% endif %}
+
+{% if saved and reset %}
+    <div class="flash success">
+        Prompt matches the bundled default; override file removed.
+    </div>
+{% elif saved %}
+    <div class="flash success">Prompt saved.</div>
+{% endif %}
+
+<p class="muted">
+    Available template placeholders: <code>{title}</code>, <code>{url}</code>,
+    <code>{listing}</code>.
+</p>
+
+{% if override_path is not none %}
+<form method="post" action="{{ url_for('prompt_settings_save') }}">
+    <textarea name="prompt" rows="20" style="width: 100%; font-family: monospace;">{{ prompt_text }}</textarea>
+    <div class="actions" style="margin-top: 0.5rem;">
+        <button type="submit" class="primary">Save</button>
+    </div>
+</form>
+
+{% if is_overridden %}
+<form method="post" action="{{ url_for('prompt_settings_reset') }}"
+      onsubmit="return confirm('Discard the override and use the bundled default?');"
+      style="margin-top: 0.5rem;">
+    <button type="submit">Reset to default</button>
+</form>
+{% endif %}
+{% else %}
+<pre style="white-space: pre-wrap;">{{ prompt_text }}</pre>
+{% endif %}
+{% endblock %}

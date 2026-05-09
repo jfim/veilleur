@@ -20,6 +20,7 @@ from typing import Any
 
 import httpx
 
+from veilleur.xpath.prompt import DEFAULT_PROMPT_TEMPLATE, load_active_template
 from veilleur.xpath.types import (
     Anchor,
     LLMClient,
@@ -27,24 +28,10 @@ from veilleur.xpath.types import (
     XPathDerivationFailed,
 )
 
-#: Verbatim copy of ``~/projects/rss-ify/prompt.txt``. Substitution
-#: placeholders: ``{title}``, ``{url}``, ``{listing}``.
-PROMPT_TEMPLATE = """Given the following descriptive paths for links on a webpage, return an xpath expression that only matches links to articles. Do not return navigation links, tag/category links, or other irrelevant links, just links that appear to be an article so that the user can use them to build a RSS feed. The page is called {title} and is from {url}.
-
-Each line below describes one ``<a>`` element. The path uses a CSS-like
-notation: ``tag#id`` when the element has an id, ``tag.class1.class2``
-when it has classes, ``tag#id.class`` when it has both, and ``tag[N]``
-(1-indexed among same-tag siblings) only when neither id nor class is
-available. Prefer xpath predicates that target ids and class names
-over positional indices when possible. The href is shown raw — if
-hrefs are relative (e.g. ``2025/post/index.html``), substring
-predicates like ``contains(@href, '/2025/')`` will NOT match them; use
-``starts-with(@href, '2025/')`` or class/id structure instead.
-
-{listing}
-
-Return only an xpath expression if you are able to match all of the articles and no other unwanted links, with no commentary or other messages, no markdown, no code fences, no backticks — just the raw xpath expression on a single line. If you are unable to write such an xpath expression, just write 'unable'.
-"""
+#: Bundled default. Kept as a re-export for back-compat; the active
+#: template (potentially overridden via ``VEILLEUR_PROMPT_FILE``) is
+#: resolved per-call by :func:`render_prompt`.
+PROMPT_TEMPLATE = DEFAULT_PROMPT_TEMPLATE
 
 
 def _build_listing(anchors: list[Anchor]) -> str:
@@ -53,8 +40,9 @@ def _build_listing(anchors: list[Anchor]) -> str:
 
 
 def render_prompt(title: str, url: str, anchors: list[Anchor]) -> str:
-    """Render the canonical prompt with anchor listing substituted."""
-    return PROMPT_TEMPLATE.format(title=title, url=url, listing=_build_listing(anchors))
+    """Render the active prompt with anchor listing substituted."""
+    template = load_active_template()
+    return template.format(title=title, url=url, listing=_build_listing(anchors))
 
 
 _THINKING_RE = re.compile(
