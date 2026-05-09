@@ -25,10 +25,16 @@ BASE = "http://passe-partout.test"
 
 
 def _make_client(
-    bearer_token: str | None = None, *, timeout: float = 30.0
+    bearer_token: str | None = None,
+    *,
+    wait_timeout: float = 30.0,
+    local_budget: float | None = None,
 ) -> PassePartoutClient:
     return PassePartoutClient(
-        base_url=BASE, bearer_token=bearer_token, timeout=timeout
+        base_url=BASE,
+        bearer_token=bearer_token,
+        wait_timeout=wait_timeout,
+        local_budget=local_budget,
     )
 
 
@@ -214,7 +220,7 @@ async def test_client_timeout_with_partial_html() -> None:
     )
     respx.delete(f"{BASE}/tabs/tab-slow").mock(return_value=httpx.Response(204))
 
-    async with _make_client(timeout=0.2) as client:
+    async with _make_client(wait_timeout=0.05, local_budget=0.2) as client:
         with pytest.raises(FetchTimeout) as exc_info:
             await client.fetch("https://slow.example")
 
