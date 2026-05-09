@@ -12,6 +12,7 @@ edit it without coordinating with the reference implementation.
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
 
 import httpx
@@ -41,6 +42,23 @@ def _build_listing(anchors: list[Anchor]) -> str:
 def render_prompt(title: str, url: str, anchors: list[Anchor]) -> str:
     """Render the canonical prompt with anchor listing substituted."""
     return PROMPT_TEMPLATE.format(title=title, url=url, listing=_build_listing(anchors))
+
+
+_THINKING_RE = re.compile(
+    r"<\s*(think|thinking|thought|reasoning)\s*>.*?<\s*/\s*\1\s*>",
+    re.DOTALL | re.IGNORECASE,
+)
+
+
+def _strip_thinking(raw: str) -> str:
+    """Remove chain-of-thought blocks like ``<think>...</think>``.
+
+    Some open-weight models (e.g. DeepSeek/Qwen-style "thinking" variants)
+    prepend their reasoning inside a ``<think>`` tag before the actual
+    answer. Strip those so downstream xpath validation sees only the
+    expression.
+    """
+    return _THINKING_RE.sub("", raw)
 
 
 def _strip_fences(raw: str) -> str:
@@ -85,7 +103,7 @@ async def derive_xpath(
     """
     prompt = render_prompt(title, url, anchors)
     raw = await client.complete(prompt)
-    cleaned = _strip_fences(raw)
+    cleaned = _strip_fences(_strip_thinking(raw))
     if not cleaned:
         raise XPathDerivationFailed("LLM returned an empty reply")
     if cleaned.lower() == "unable":
