@@ -3,16 +3,18 @@
 Parses an HTML page and returns the page title plus a filtered, ordered
 list of ``<a>`` elements. Pure / synchronous / no I/O.
 
-Logic ported verbatim from ``~/projects/rss-ify/dump_anchors.py`` and
-``derive_xpath.py``: the absolute xpath is taken from
-``getroottree().getpath(a)``; text is whitespace-collapsed and
-truncated at 120 characters with an ellipsis; ``href`` is preserved
-raw.
+Each anchor's ``xpath`` field is a *descriptive* path — not a canonical
+``getpath()``-style absolute xpath, but a CSS-ish breadcrumb that
+includes ``id`` / ``class`` hints when present, falling back to a
+positional ``[N]`` index among same-tag siblings only when neither is
+available. The goal is to give the LLM enough structural context to
+write robust xpath predicates instead of relying on fragile positions.
 """
 
 from __future__ import annotations
 
 import os
+from typing import cast
 
 import lxml.etree
 import lxml.html
@@ -53,6 +55,64 @@ def _is_useless_href(href: str) -> bool:
         return True
     # Pure fragment: '#' alone, or '#something' (no path before it).
     return lowered.startswith("#")
+
+
+#: Cap on classes per segment to keep paths readable when an element
+#: carries a long utility-class list (e.g. Tailwind).
+_MAX_CLASSES_PER_SEGMENT = 3
+
+
+def _segment_for(element: lxml.html.HtmlElement) -> str:
+    """Build a single descriptive segment for *element*.
+
+    Rules (in priority order):
+
+    1. ``tag#id.class1.class2`` if both ``id`` and ``class`` present.
+    2. ``tag#id`` if only ``id``.
+    3. ``tag.class1.class2`` if only ``class`` (cap at three classes).
+    4. ``tag[N]`` (1-indexed among same-tag siblings) otherwise.
+    """
+    tag = element.tag
+    if not isinstance(tag, str):
+        # Comments / processing instructions have non-string tags; skip.
+        return "node"
+
+    el_id = (element.get("id") or "").strip()
+    classes = (element.get("class") or "").split()
+    classes = [c for c in classes if c]
+
+    if el_id and classes:
+        kept = ".".join(classes[:_MAX_CLASSES_PER_SEGMENT])
+        return f"{tag}#{el_id}.{kept}"
+    if el_id:
+        return f"{tag}#{el_id}"
+    if classes:
+        kept = ".".join(classes[:_MAX_CLASSES_PER_SEGMENT])
+        return f"{tag}.{kept}"
+
+    parent = element.getparent()
+    if parent is None:
+        return tag
+    same_tag_siblings = [c for c in parent if c.tag == tag]
+    if len(same_tag_siblings) <= 1:
+        return tag
+    index = same_tag_siblings.index(element) + 1
+    return f"{tag}[{index}]"
+
+
+def _build_descriptive_path(element: lxml.html.HtmlElement) -> str:
+    """Walk from root to *element*, joining ``_segment_for`` with ``/``.
+
+    The leading ``/`` mirrors absolute-xpath aesthetics so the model
+    can mentally map "where on the page is this".
+    """
+    chain: list[lxml.html.HtmlElement] = []
+    current: lxml.html.HtmlElement | None = element
+    while current is not None:
+        chain.append(current)
+        current = cast("lxml.html.HtmlElement | None", current.getparent())
+    chain.reverse()
+    return "/" + "/".join(_segment_for(el) for el in chain)
 
 
 def _normalize_text(raw: str) -> str:
@@ -101,14 +161,13 @@ def extract_anchors(html: str, base_url: str) -> AnchorExtractionResult:
     else:
         title = "(untitled)"
 
-    rt = root.getroottree()
     anchors: list[Anchor] = []
     for a in root.xpath("//a"):
         href = a.get("href", "")
         if _is_useless_href(href):
             continue
         text = _normalize_text(a.text_content())
-        anchors.append(Anchor(xpath=rt.getpath(a), text=text, href=href))
+        anchors.append(Anchor(xpath=_build_descriptive_path(a), text=text, href=href))
 
     if not anchors:
         raise AnchorExtractionError("no usable anchors")

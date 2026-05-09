@@ -5,8 +5,11 @@ The concrete :class:`HttpxLLMClient` here speaks the OpenAI-compatible
 ``/chat/completions`` shape, configured by the ``LLM_API_URL``,
 ``LLM_MODEL_NAME`` and ``LLM_API_KEY`` environment variables.
 
-The prompt is verbatim from ``~/projects/rss-ify/prompt.txt``; do not
-edit it without coordinating with the reference implementation.
+The prompt was originally adapted from ``~/projects/rss-ify/prompt.txt``
+but has diverged: anchor paths now carry ``id`` / ``class`` hints
+(see :mod:`veilleur.xpath.anchors`) and the prompt explains that
+format so the model can target classes/ids instead of fragile
+positional indices.
 """
 
 from __future__ import annotations
@@ -26,7 +29,17 @@ from veilleur.xpath.types import (
 
 #: Verbatim copy of ``~/projects/rss-ify/prompt.txt``. Substitution
 #: placeholders: ``{title}``, ``{url}``, ``{listing}``.
-PROMPT_TEMPLATE = """Given the following xpath absolute paths for links on a webpage, return an xpath expression that only matches links to articles. Do not return navigation links, tag/category links, or other irrelevant links, just links that appear to be an article so that the user can use them to build a RSS feed. The page is called {title} and is from {url}.
+PROMPT_TEMPLATE = """Given the following descriptive paths for links on a webpage, return an xpath expression that only matches links to articles. Do not return navigation links, tag/category links, or other irrelevant links, just links that appear to be an article so that the user can use them to build a RSS feed. The page is called {title} and is from {url}.
+
+Each line below describes one ``<a>`` element. The path uses a CSS-like
+notation: ``tag#id`` when the element has an id, ``tag.class1.class2``
+when it has classes, ``tag#id.class`` when it has both, and ``tag[N]``
+(1-indexed among same-tag siblings) only when neither id nor class is
+available. Prefer xpath predicates that target ids and class names
+over positional indices when possible. The href is shown raw — if
+hrefs are relative (e.g. ``2025/post/index.html``), substring
+predicates like ``contains(@href, '/2025/')`` will NOT match them; use
+``starts-with(@href, '2025/')`` or class/id structure instead.
 
 {listing}
 

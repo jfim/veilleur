@@ -89,6 +89,67 @@ def test_anchor_xpath_is_absolute() -> None:
         assert anchor.xpath.startswith("/")
 
 
+def test_descriptive_path_uses_id_when_present() -> None:
+    html = (
+        "<html><head><title>T</title></head>"
+        "<body><div id='content'><a href='/p'>x</a></div></body></html>"
+    )
+    result = extract_anchors(html, "https://example.com/")
+    assert result.anchors[0].xpath == "/html/body/div#content/a"
+
+
+def test_descriptive_path_uses_class_when_no_id() -> None:
+    html = (
+        "<html><head><title>T</title></head>"
+        "<body><div class='post-list wide'><a href='/p'>x</a></div></body></html>"
+    )
+    result = extract_anchors(html, "https://example.com/")
+    assert result.anchors[0].xpath == "/html/body/div.post-list.wide/a"
+
+
+def test_descriptive_path_uses_id_and_class_when_both_present() -> None:
+    html = (
+        "<html><head><title>T</title></head>"
+        "<body><div id='main' class='post-list'><a href='/p'>x</a></div></body></html>"
+    )
+    result = extract_anchors(html, "https://example.com/")
+    assert result.anchors[0].xpath == "/html/body/div#main.post-list/a"
+
+
+def test_descriptive_path_falls_back_to_positional_among_same_tag() -> None:
+    html = (
+        "<html><head><title>T</title></head><body>"
+        "<div><p>a</p></div>"
+        "<div><a href='/p'>x</a></div>"
+        "<div><span>z</span></div>"
+        "</body></html>"
+    )
+    result = extract_anchors(html, "https://example.com/")
+    # Anchor sits inside the second <div> sibling.
+    assert result.anchors[0].xpath == "/html/body/div[2]/a"
+
+
+def test_descriptive_path_omits_index_when_unique_among_siblings() -> None:
+    html = (
+        "<html><head><title>T</title></head><body>"
+        "<header><a href='/h'>h</a></header>"
+        "<main><a href='/m'>m</a></main>"
+        "</body></html>"
+    )
+    result = extract_anchors(html, "https://example.com/")
+    paths = [a.xpath for a in result.anchors]
+    assert paths == ["/html/body/header/a", "/html/body/main/a"]
+
+
+def test_descriptive_path_caps_classes_per_segment() -> None:
+    html = (
+        "<html><head><title>T</title></head>"
+        "<body><div class='a b c d e f'><a href='/p'>x</a></div></body></html>"
+    )
+    result = extract_anchors(html, "https://example.com/")
+    assert result.anchors[0].xpath == "/html/body/div.a.b.c/a"
+
+
 def test_anchor_cap_truncates_and_flags(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VEILLEUR_XPATH_MAX_ANCHORS", "3")
     html = (
