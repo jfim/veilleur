@@ -1,16 +1,75 @@
-"""Application configuration loaded from the environment via pydantic-settings."""
+"""Application configuration loaded from the environment via pydantic-settings.
 
+Env vars are the source of truth; `.env` is read only as a local-dev convenience
+and is gitignored. See ``docs/design/phase-1-foundations.md`` §7 for the full
+table of variables.
+"""
+
+from __future__ import annotations
+
+from functools import lru_cache
+
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Runtime configuration for Veilleur."""
 
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="VEILLEUR_", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
-    database_url: str = "postgresql+psycopg://veilleur:veilleur@localhost:5432/veilleur"
-    passe_partout_url: str = "http://localhost:8080"
-    anthropic_api_key: str = ""
+    # Outbound LLM (consumed in later phases; optional in Phase 1)
+    LLM_API_URL: str | None = None
+    LLM_MODEL_NAME: str | None = None
+    LLM_API_KEY: SecretStr | None = None
+
+    # Outbound passe-partout (consumed in later phases; optional in Phase 1)
+    PASSEPARTOUT_URL: str | None = None
+    PASSEPARTOUT_BEARER_TOKEN: SecretStr | None = None
+
+    # Postgres connection
+    POSTGRES_HOST: str = "localhost"
+    POSTGRES_PORT: int = 5432
+    POSTGRES_USER: str = "veilleur"
+    POSTGRES_PASSWORD: SecretStr = SecretStr("veilleur")
+    POSTGRES_DB: str = "veilleur"
+
+    # General
+    LOG_LEVEL: str = "INFO"
+
+    # Inbound API auth (Phase 1: optional; when unset, programmatic API rejects all
+    # requests except /healthz)
+    VEILLEUR_API_BEARER_TOKEN: SecretStr | None = None
+
+    # Phase 3 — declared here for parity, used later
+    VEILLEUR_XPATH_MAX_ANCHORS: int = 250
+
+    # Scrape defaults (consumed later)
+    SCRAPE_DEFAULT_INTERVAL_SECONDS: int = 3600
+    SCRAPE_HTTP_TIMEOUT_SECONDS: int = 60
+
+    @property
+    def database_url_async(self) -> str:
+        pw = self.POSTGRES_PASSWORD.get_secret_value()
+        return (
+            f"postgresql+asyncpg://{self.POSTGRES_USER}:{pw}"
+            f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        )
+
+    @property
+    def database_url_sync(self) -> str:
+        pw = self.POSTGRES_PASSWORD.get_secret_value()
+        return (
+            f"postgresql+psycopg://{self.POSTGRES_USER}:{pw}"
+            f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        )
 
 
-settings = Settings()
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    """Return the cached settings singleton."""
+    return Settings()
