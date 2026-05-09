@@ -25,6 +25,7 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "httpx",
+    "hypothesis>=6.152.4",
 ]
 
 [build-system]
