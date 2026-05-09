@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Feeds — Veilleur{% endblock %}
+
+{% block content %}
+<h2>Add feed</h2>
+<form class="add-form" method="post" action="{{ url_for('create_feed_form') }}">
+    <div>
+        <label for="url">URL</label>
+        <input type="url" name="url" id="url" required placeholder="https://example.com/blog">
+    </div>
+    <div>
+        <label for="title">Title (optional)</label>
+        <input type="text" name="title" id="title">
+    </div>
+    <div>
+        <label for="poll_interval_seconds">Poll seconds</label>
+        <input type="number" name="poll_interval_seconds" id="poll_interval_seconds" min="1" placeholder="3600">
+    </div>
+    <div>
+        <button type="submit" class="primary">Add</button>
+    </div>
+</form>
+
+<h2>Feeds <span class="muted">({{ feeds|length }})</span></h2>
+{% if not feeds %}
+    <p class="muted">No feeds yet. Add one above.</p>
+{% else %}
+<table>
+    <thead>
+        <tr>
+            <th>Title</th>
+            <th>Status</th>
+            <th>Last scraped</th>
+            <th>Items</th>
+            <th>Last failure</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for row in feeds %}
+        <tr>
+            <td>
+                <a href="{{ url_for('feed_detail', feed_id=row.feed.id) }}">
+                    {{ row.feed.title }}
+                </a>
+                <div class="muted" style="font-size: 0.8rem;">{{ row.feed.url }}</div>
+            </td>
+            <td class="status-{{ row.feed.status }}">{{ row.feed.status }}</td>
+            <td>{{ row.feed.last_scraped_at|datetime or "—" }}</td>
+            <td>{{ row.item_count }}</td>
+            <td>
+                {% if row.feed.last_failure_reason %}
+                    <span class="failure-reason">{{ row.feed.last_failure_reason }}</span>
+                {% else %}
+                    <span class="muted">—</span>
+                {% endif %}
+            </td>
+            <td class="actions">
+                <form method="post" action="{{ url_for('scrape_feed_form', feed_id=row.feed.id) }}">
+                    <button type="submit">Scrape</button>
+                </form>
+                {% if row.feed.status == 'paused' %}
+                    <form method="post" action="{{ url_for('unpause_feed_form', feed_id=row.feed.id) }}">
+                        <button type="submit">Unpause</button>
+                    </form>
+                {% else %}
+                    <form method="post" action="{{ url_for('pause_feed_form', feed_id=row.feed.id) }}">
+                        <button type="submit">Pause</button>
+                    </form>
+                {% endif %}
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endblock %}

@@ -16,6 +16,7 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import Depends, FastAPI
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +28,7 @@ from veilleur.feeds import feeds_public_router
 from veilleur.pipeline import ScrapeOutcome, run_scrape
 from veilleur.scheduler import SchedulerLoop
 from veilleur.scraper import PassePartoutClient
+from veilleur.web import STATIC_DIR, STATIC_PATH, web_router
 from veilleur.xpath import HttpxLLMClient
 
 logger = logging.getLogger(__name__)
@@ -121,6 +123,8 @@ app = FastAPI(title="Veilleur", version="0.1.0", lifespan=lifespan)
 # unauthenticated handler first.
 app.include_router(feeds_public_router)
 app.include_router(api_router)
+app.include_router(web_router)
+app.mount(STATIC_PATH, StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 @app.get("/healthz")

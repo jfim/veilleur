@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}{{ feed.title }} — Veilleur{% endblock %}
+
+{% block content %}
+<p><a href="{{ url_for('index') }}">&larr; back to feeds</a></p>
+<h2>{{ feed.title }}</h2>
+<p class="muted">
+    <a href="{{ feed.url }}" rel="noopener">{{ feed.url }}</a>
+    &middot; <span class="status-{{ feed.status }}">{{ feed.status }}</span>
+    &middot; last scraped: {{ feed.last_scraped_at|datetime or "never" }}
+</p>
+{% if feed.last_failure_reason %}
+    <p class="failure-reason">{{ feed.last_failure_reason }}</p>
+{% endif %}
+
+<p>
+    Public feeds:
+    <a href="{{ url_for('get_rss', feed_id=feed.id) }}">RSS</a> &middot;
+    <a href="{{ url_for('get_atom', feed_id=feed.id) }}">Atom</a>
+</p>
+
+<h3>Actions</h3>
+<div class="actions">
+    <form method="post" action="{{ url_for('scrape_feed_form', feed_id=feed.id) }}">
+        <button type="submit" class="primary">Scrape now</button>
+    </form>
+    {% if feed.status == 'paused' %}
+        <form method="post" action="{{ url_for('unpause_feed_form', feed_id=feed.id) }}">
+            <button type="submit">Unpause</button>
+        </form>
+    {% else %}
+        <form method="post" action="{{ url_for('pause_feed_form', feed_id=feed.id) }}">
+            <button type="submit">Pause</button>
+        </form>
+    {% endif %}
+    <form method="post" action="{{ url_for('delete_feed_form', feed_id=feed.id) }}"
+          onsubmit="return confirm('Delete this feed and all its items?');">
+        <input type="hidden" name="_method" value="DELETE">
+        <button type="submit" class="danger">Delete</button>
+    </form>
+</div>
+
+<h3>Edit</h3>
+<form method="post" action="{{ url_for('update_feed_form', feed_id=feed.id) }}"
+      class="add-form" style="grid-template-columns: 2fr 1fr auto;">
+    <div>
+        <label for="title">Title</label>
+        <input type="text" name="title" id="title" value="{{ feed.title }}">
+    </div>
+    <div>
+        <label for="poll_interval_seconds">Poll seconds</label>
+        <input type="number" name="poll_interval_seconds" id="poll_interval_seconds"
+               min="1" value="{{ feed.poll_interval_seconds }}">
+    </div>
+    <div>
+        <button type="submit" class="primary">Save</button>
+    </div>
+</form>
+
+<h3>Active XPath</h3>
+{% if active_xpath %}
+    <pre class="xpath">{{ active_xpath }}</pre>
+{% else %}
+    <p class="muted">No xpath has been derived yet — trigger a scrape to derive one.</p>
+{% endif %}
+
+<h3>Recent items <span class="muted">({{ items|length }})</span></h3>
+{% if not items %}
+    <p class="muted">No items yet.</p>
+{% else %}
+<table>
+    <thead>
+        <tr>
+            <th>Title</th>
+            <th>First seen</th>
+            <th>Last seen</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for item in items %}
+        <tr>
+            <td><a href="{{ item.url }}" rel="noopener">{{ item.title }}</a></td>
+            <td>{{ item.first_seen_at|datetime }}</td>
+            <td>{{ item.last_seen_at|datetime }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+<h3>Recent runs <span class="muted">({{ runs|length }})</span></h3>
+{% if not runs %}
+    <p class="muted">No runs yet.</p>
+{% else %}
+<table>
+    <thead>
+        <tr>
+            <th>Started</th>
+            <th>Status</th>
+            <th>Items seen</th>
+            <th>Items new</th>
+            <th>Error</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for run in runs %}
+        <tr>
+            <td>{{ run.started_at|datetime }}</td>
+            <td class="status-{{ 'failed' if run.status == 'failed' else 'active' }}">
+                {{ run.status }}
+            </td>
+            <td>{{ run.items_seen }}</td>
+            <td>{{ run.items_new }}</td>
+            <td>
+                {% if run.error_message %}
+                    <span class="failure-reason">{{ run.error_message }}</span>
+                {% else %}
+                    <span class="muted">—</span>
+                {% endif %}
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Veilleur{% endblock %}</title>
+    <link rel="stylesheet" href="{{ static_url('/static/style.css') }}">
+</head>
+<body>
+<header class="site">
+    <h1><a href="{{ url_for('index') }}">Veilleur</a></h1>
+</header>
+<main>
+    {% if flash %}
+        <div class="flash {{ flash.kind }}">{{ flash.message }}</div>
+    {% endif %}
+    {% block content %}{% endblock %}
+</main>
+</body>
+</html>
