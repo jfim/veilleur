@@ -107,7 +107,15 @@ class PassePartoutClient:
             self._http: httpx.AsyncClient = httpx.AsyncClient(
                 base_url=base_url,
                 headers=headers,
-                timeout=httpx.Timeout(connect=5.0, read=30.0, write=5.0, pool=5.0),
+                # Read timeout matches local_budget so the asyncio.timeout below
+                # fires first and produces the clearer "exceeded budget" error
+                # rather than a bare httpx.ReadTimeout from a long /wait call.
+                timeout=httpx.Timeout(
+                    connect=5.0,
+                    read=self._local_budget,
+                    write=5.0,
+                    pool=5.0,
+                ),
             )
         else:
             self._http = http_client
@@ -141,6 +149,7 @@ class PassePartoutClient:
                 "tab_id": None,
                 "status_code": 0,
                 "final_url": url,
+                "step": "create_tab",
             }
             try:
                 async with asyncio.timeout(self._local_budget):
@@ -167,6 +176,7 @@ class PassePartoutClient:
         tab_id: str | None = None
 
         try:
+            state["step"] = "create_tab"
             create_resp = await self._http.post("/tabs", json={"url": url})
             tab_id, status_code, final_url, content_type = self._parse_create(
                 create_resp, url
@@ -180,12 +190,14 @@ class PassePartoutClient:
 
             started = state["started"]
             started_f = started if isinstance(started, float) else monotonic()
+            state["step"] = "wait_networkidle"
             wait_resp = await self._http.post(
                 f"/tabs/{tab_id}/wait",
                 json={"network_idle": True, "timeout_ms": int(self._wait_timeout * 1000)},
             )
             self._handle_tab_response(wait_resp)
 
+            state["step"] = "fetch_html"
             html_resp = await self._http.get(f"/tabs/{tab_id}/html")
             self._handle_tab_response(html_resp)
             html = html_resp.text
@@ -199,11 +211,21 @@ class PassePartoutClient:
                 elapsed_ms=elapsed_ms,
             )
         except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
-            raise PassePartoutUnavailable(f"connection error: {exc}") from exc
+            step = state.get("step", "?")
+            raise PassePartoutUnavailable(
+                f"passe-partout connection error during {step}: {exc}"
+            ) from exc
         except httpx.ReadTimeout as exc:
-            raise FetchTimeout(f"http read timeout: {exc}") from exc
+            step = state.get("step", "?")
+            raise FetchTimeout(
+                f"passe-partout read timeout during {step} "
+                f"(httpx read={self._local_budget}s): {exc}"
+            ) from exc
         except httpx.HTTPError as exc:
-            raise PassePartoutUnavailable(f"http error: {exc}") from exc
+            step = state.get("step", "?")
+            raise PassePartoutUnavailable(
+                f"passe-partout http error during {step}: {exc}"
+            ) from exc
         finally:
             if tab_id is not None:
                 # Shielded so a timeout cancellation doesn't kill the cleanup.
