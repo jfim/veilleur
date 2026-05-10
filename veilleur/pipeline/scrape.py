@@ -595,7 +595,7 @@ def _persist_raw_html(
         return None
     from veilleur.config import get_settings
 
-    raw_html_dir = get_settings().VEILLEUR_RAW_HTML_DIR
+    raw_html_dir = get_settings().RAW_HTML_DIR
     if raw_html_dir is None:
         return None
     try:

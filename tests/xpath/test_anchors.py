@@ -151,7 +151,7 @@ def test_descriptive_path_caps_classes_per_segment() -> None:
 
 
 def test_anchor_cap_truncates_and_flags(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("VEILLEUR_XPATH_MAX_ANCHORS", "3")
+    monkeypatch.setenv("XPATH_MAX_ANCHORS", "3")
     html = (
         "<html><head><title>T</title></head><body>"
         + "".join(f"<a href='/p{i}'>p{i}</a>" for i in range(10))
@@ -165,13 +165,13 @@ def test_anchor_cap_truncates_and_flags(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_anchor_cap_invalid_value_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("VEILLEUR_XPATH_MAX_ANCHORS", "not-a-number")
+    monkeypatch.setenv("XPATH_MAX_ANCHORS", "not-a-number")
     with pytest.raises(AnchorExtractionError):
         extract_anchors(load_fixture("simple-blog.html"), "https://example.com/")
 
 
 def test_anchor_cap_zero_value_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("VEILLEUR_XPATH_MAX_ANCHORS", "0")
+    monkeypatch.setenv("XPATH_MAX_ANCHORS", "0")
     with pytest.raises(AnchorExtractionError):
         extract_anchors(load_fixture("simple-blog.html"), "https://example.com/")
 

@@ -119,7 +119,7 @@ class AnchorExtractionResult:
     Attributes:
         title: Page title (``"(untitled)"`` if missing).
         anchors: Anchors after filtering, in document order, capped at
-            ``VEILLEUR_XPATH_MAX_ANCHORS`` if necessary.
+            ``XPATH_MAX_ANCHORS`` if necessary.
         truncated: ``True`` if anchors were truncated by the cap.
         total_before_cap: Count of anchors after filtering, before the
             cap was applied (always ``>= len(anchors)``).

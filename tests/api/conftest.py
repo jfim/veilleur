@@ -43,9 +43,9 @@ class StubLLMClient:
 
 @pytest.fixture
 def configure_api_token(alembic_upgraded: None) -> Iterator[None]:
-    """Set ``VEILLEUR_API_BEARER_TOKEN`` for the duration of a test."""
-    old = os.environ.get("VEILLEUR_API_BEARER_TOKEN")
-    os.environ["VEILLEUR_API_BEARER_TOKEN"] = TEST_BEARER_TOKEN
+    """Set ``API_BEARER_TOKEN`` for the duration of a test."""
+    old = os.environ.get("API_BEARER_TOKEN")
+    os.environ["API_BEARER_TOKEN"] = TEST_BEARER_TOKEN
     from veilleur.config import get_settings
 
     get_settings.cache_clear()
@@ -53,9 +53,9 @@ def configure_api_token(alembic_upgraded: None) -> Iterator[None]:
         yield
     finally:
         if old is None:
-            os.environ.pop("VEILLEUR_API_BEARER_TOKEN", None)
+            os.environ.pop("API_BEARER_TOKEN", None)
         else:
-            os.environ["VEILLEUR_API_BEARER_TOKEN"] = old
+            os.environ["API_BEARER_TOKEN"] = old
         get_settings.cache_clear()
 
 

@@ -94,10 +94,10 @@ def _build_scheduler() -> tuple[SchedulerLoop, list[object]] | None:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     settings = get_settings()
-    if settings.VEILLEUR_RAW_HTML_DIR is not None:
+    if settings.RAW_HTML_DIR is not None:
         # Fail fast on a misconfigured directory rather than discovering it
         # mid-scrape and silently dropping HTML payloads.
-        validate_raw_html_dir(settings.VEILLEUR_RAW_HTML_DIR)
+        validate_raw_html_dir(settings.RAW_HTML_DIR)
     scheduler: SchedulerLoop | None = None
     owned: list[object] = []
     if settings.SCHEDULER_ENABLED:

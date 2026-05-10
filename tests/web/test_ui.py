@@ -82,14 +82,14 @@ async def test_unset_token_rejects_web_ui(
 ) -> None:
     from veilleur.config import get_settings
 
-    old = os.environ.pop("VEILLEUR_API_BEARER_TOKEN", None)
+    old = os.environ.pop("API_BEARER_TOKEN", None)
     get_settings.cache_clear()
     try:
         r = await web_client.get("/")
         assert r.status_code == 401
     finally:
         if old is not None:
-            os.environ["VEILLEUR_API_BEARER_TOKEN"] = old
+            os.environ["API_BEARER_TOKEN"] = old
         get_settings.cache_clear()
 
 
@@ -492,7 +492,7 @@ async def test_prompt_settings_disabled_when_unset(
 ) -> None:
     from veilleur.config import get_settings
 
-    old = os.environ.pop("VEILLEUR_PROMPT_FILE", None)
+    old = os.environ.pop("PROMPT_FILE", None)
     get_settings.cache_clear()
     try:
         r = await web_client.get("/ui/settings/prompt")
@@ -505,7 +505,7 @@ async def test_prompt_settings_disabled_when_unset(
         assert save.status_code == 409
     finally:
         if old is not None:
-            os.environ["VEILLEUR_PROMPT_FILE"] = old
+            os.environ["PROMPT_FILE"] = old
         get_settings.cache_clear()
 
 
@@ -518,8 +518,8 @@ async def test_prompt_settings_save_and_reset(
     from veilleur.xpath import prompt as xpath_prompt
 
     target = tmp_path / "prompt.txt"
-    old = os.environ.get("VEILLEUR_PROMPT_FILE")
-    os.environ["VEILLEUR_PROMPT_FILE"] = str(target)
+    old = os.environ.get("PROMPT_FILE")
+    os.environ["PROMPT_FILE"] = str(target)
     get_settings.cache_clear()
     try:
         r = await web_client.get("/ui/settings/prompt")
@@ -549,9 +549,9 @@ async def test_prompt_settings_save_and_reset(
         assert not target.exists()
     finally:
         if old is None:
-            os.environ.pop("VEILLEUR_PROMPT_FILE", None)
+            os.environ.pop("PROMPT_FILE", None)
         else:
-            os.environ["VEILLEUR_PROMPT_FILE"] = old
+            os.environ["PROMPT_FILE"] = old
         get_settings.cache_clear()
 
 

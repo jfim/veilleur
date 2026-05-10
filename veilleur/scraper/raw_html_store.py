@@ -1,6 +1,6 @@
 """Filesystem storage for raw fetched HTML.
 
-When ``Settings.VEILLEUR_RAW_HTML_DIR`` is configured the scrape pipeline
+When ``Settings.RAW_HTML_DIR`` is configured the scrape pipeline
 gzips each successfully-fetched page and writes it under that directory.
 A relative path (rooted at the configured directory) is then stored on the
 ``scrape_runs`` row in ``raw_html_path``; the in-DB ``raw_html`` column is
@@ -31,13 +31,13 @@ def validate_raw_html_dir(path: Path) -> None:
     """
     if not path.is_absolute():
         raise RuntimeError(
-            f"VEILLEUR_RAW_HTML_DIR must be an absolute path, got: {path!s}"
+            f"RAW_HTML_DIR must be an absolute path, got: {path!s}"
         )
     try:
         path.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
         raise RuntimeError(
-            f"VEILLEUR_RAW_HTML_DIR {path!s} could not be created: {exc}"
+            f"RAW_HTML_DIR {path!s} could not be created: {exc}"
         ) from exc
     # Probe writability with a temp file.
     probe = path / ".veilleur-write-probe"
@@ -46,7 +46,7 @@ def validate_raw_html_dir(path: Path) -> None:
         probe.unlink()
     except OSError as exc:
         raise RuntimeError(
-            f"VEILLEUR_RAW_HTML_DIR {path!s} is not writable: {exc}"
+            f"RAW_HTML_DIR {path!s} is not writable: {exc}"
         ) from exc
 
 

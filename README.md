@@ -86,19 +86,19 @@ them directly — no `.env` file inside the image.
 | `SCRAPE_HTTP_TIMEOUT_SECONDS` | `60` | HTTP timeout when calling passe-partout. |
 | `SCHEDULER_ENABLED` | `true` | Run the in-process scrape scheduler. Disable for worker-less deploys. |
 | `SCHEDULER_TICK_SECONDS` | `30` | How often the scheduler wakes up to look for due feeds. |
-| `VEILLEUR_RAW_HTML_DIR` | _unset_ | If set, an absolute path inside the container where raw fetched HTML is gzipped and persisted. Mount a volume here to keep it. |
+| `RAW_HTML_DIR` | _unset_ | If set, an absolute path inside the container where raw fetched HTML is gzipped and persisted. Mount a volume here to keep it. |
 
 #### XPath derivation
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `VEILLEUR_XPATH_MAX_ANCHORS` | `250` | Maximum anchors sampled from a page when prompting the LLM. |
-| `VEILLEUR_XPATH_MAX_ATTEMPTS` | `3` | Maximum number of attempts the LLM will make to derive a valid xpath expression before the feed is marked as failed. |
-| `VEILLEUR_PROMPT_FILE` | _unset_ | Absolute path to a prompt-template override file. When unset the bundled default is used. |
+| `XPATH_MAX_ANCHORS` | `250` | Maximum anchors sampled from a page when prompting the LLM. |
+| `XPATH_MAX_ATTEMPTS` | `3` | Maximum number of attempts the LLM will make to derive a valid xpath expression before the feed is marked as failed. |
+| `PROMPT_FILE` | _unset_ | Absolute path to a prompt-template override file. When unset the bundled default is used. |
 
 #### API auth & misc
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `VEILLEUR_API_BEARER_TOKEN` | _unset_ | Bearer token required by the programmatic REST API. When unset every API request except `/healthz` is rejected. |
+| `API_BEARER_TOKEN` | _unset_ | Bearer token required by the programmatic REST API. When unset every API request except `/healthz` is rejected. |
 | `LOG_LEVEL` | `INFO` | Python logging level. |

@@ -33,7 +33,7 @@ API layer on top of the existing pipeline.
 
 ### Auth
 
-`VEILLEUR_API_BEARER_TOKEN` (already declared in `veilleur/config.py`).
+`API_BEARER_TOKEN` (already declared in `veilleur/config.py`).
 `Authorization: Bearer <token>` required for everything except `/healthz`.
 When the env var is unset, all programmatic endpoints return 401.
 

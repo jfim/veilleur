@@ -11,7 +11,7 @@ design doc and the resolutions below; where they conflict, the resolutions win.
   debugging xpath regressions). Move to object storage later — tracked as a
   follow-up issue. Apply column-level compression where available.
 - **Programmatic API auth**: Veilleur itself exposes a bearer-token-protected
-  REST API. Add `VEILLEUR_API_BEARER_TOKEN` env var (optional; when unset, the
+  REST API. Add `API_BEARER_TOKEN` env var (optional; when unset, the
   API rejects all programmatic requests except `/healthz`). LLM_API_KEY and
   PASSEPARTOUT_BEARER_TOKEN are unrelated to this — those are outbound creds.
 - **`feeds.last_failure_reason`**: add a nullable `VARCHAR` column on `feeds`
@@ -33,7 +33,7 @@ design doc and the resolutions below; where they conflict, the resolutions win.
 
 ## Phase 3 — XPath toolkit
 
-- **Anchor cap**: configurable. Add env var `VEILLEUR_XPATH_MAX_ANCHORS`
+- **Anchor cap**: configurable. Add env var `XPATH_MAX_ANCHORS`
   (default `250`). The anchor extractor truncates to this count before
   sending to the LLM. Document the truncation in the result (e.g., a flag on
   the returned `(title, anchors)` tuple, or a separate diagnostic) so the

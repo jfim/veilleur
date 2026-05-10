@@ -1,7 +1,7 @@
 """HTTP Basic auth for the Phase 9 web UI.
 
 Per ``docs/design/phases-6-9.md``, the web UI shares its credential with the
-REST API: ``VEILLEUR_API_BEARER_TOKEN`` doubles as the HTTP Basic password.
+REST API: ``API_BEARER_TOKEN`` doubles as the HTTP Basic password.
 The username is ignored (any non-empty value is accepted) — operators only
 ever type the password into the browser prompt.
 
@@ -35,7 +35,7 @@ async def require_basic_auth(
     authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> None:
     """Enforce HTTP Basic with the bearer token as the password."""
-    expected = get_settings().VEILLEUR_API_BEARER_TOKEN
+    expected = get_settings().API_BEARER_TOKEN
     if expected is None or expected.get_secret_value() == "":
         raise _unauthorized("API authentication is not configured")
     if not authorization or not authorization.lower().startswith("basic "):

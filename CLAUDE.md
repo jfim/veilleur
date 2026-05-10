@@ -19,7 +19,8 @@ Use `just` for all common tasks:
 ## Layout
 
 - `veilleur/app.py` — FastAPI entry point; mounts UI, REST API, and feed routes.
-- `veilleur/config.py` — pydantic-settings `Settings` (env prefix `VEILLEUR_`).
+- `veilleur/config.py` — pydantic-settings `Settings`. Field names match env
+  var names verbatim (no `env_prefix` is applied).
 - `veilleur/db/` — SQLAlchemy models, session factory, Alembic migrations.
   Stores feed definitions and the full history of scraped items.
 - `veilleur/scraper/` — fetches pages via passe-partout, parses with lxml,
