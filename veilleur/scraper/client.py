@@ -195,7 +195,18 @@ class PassePartoutClient:
                 f"/tabs/{tab_id}/wait",
                 json={"network_idle": True, "timeout_ms": int(self._wait_timeout * 1000)},
             )
-            self._handle_tab_response(wait_resp)
+            # 408 on /wait means networkidle didn't settle in time. networkidle
+            # is flaky on pages with long-lived connections (analytics beacons,
+            # websockets), so proceed with whatever HTML rendered so far rather
+            # than failing the whole fetch.
+            if wait_resp.status_code != 408:
+                self._handle_tab_response(wait_resp)
+            else:
+                logger.info(
+                    "passe-partout /wait returned 408 for tab %s; "
+                    "proceeding with current HTML",
+                    tab_id,
+                )
 
             state["step"] = "fetch_html"
             html_resp = await self._http.get(f"/tabs/{tab_id}/html")

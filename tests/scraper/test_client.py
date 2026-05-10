@@ -77,6 +77,38 @@ async def test_client_success_full_flow() -> None:
 
 
 @respx.mock
+async def test_client_wait_408_proceeds_with_partial_html() -> None:
+    """A 408 from /wait (networkidle didn't settle) is non-fatal — fetch HTML anyway."""
+    respx.post(f"{BASE}/tabs").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": "tab-408",
+                "status": 200,
+                "final_url": "https://example.com/slow",
+                "content_type": "text/html",
+            },
+        )
+    )
+    respx.post(f"{BASE}/tabs/tab-408/wait").mock(
+        return_value=httpx.Response(
+            408, json={"error": "timeout", "detail": "wait timed out"}
+        )
+    )
+    html = respx.get(f"{BASE}/tabs/tab-408/html").mock(
+        return_value=httpx.Response(200, text="<html>partial</html>")
+    )
+    respx.delete(f"{BASE}/tabs/tab-408").mock(return_value=httpx.Response(204))
+
+    async with _make_client() as client:
+        result = await client.fetch("https://example.com/slow")
+
+    assert result.status_code == 200
+    assert result.html == "<html>partial</html>"
+    assert html.called
+
+
+@respx.mock
 async def test_client_target_page_404_does_not_raise() -> None:
     """A 404 from the *target site* is reported via ``status_code``, not raised."""
     respx.post(f"{BASE}/tabs").mock(
