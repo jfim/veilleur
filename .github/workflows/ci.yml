@@ -37,6 +37,9 @@ jobs:
       POSTGRES_PASSWORD: veilleur
       POSTGRES_DB: veilleur
       PASSEPARTOUT_URL: http://localhost:8000
+      # Reuse the postgres service container above instead of spinning up
+      # another testcontainer per test session.
+      VEILLEUR_TEST_REUSE_POSTGRES: "1"
 
     steps:
       - uses: actions/checkout@v4

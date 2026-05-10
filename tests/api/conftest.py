@@ -1,9 +1,9 @@
 """API-test fixtures.
 
-Like the pipeline tests, these run against the session-scoped Postgres
-testcontainer and TRUNCATE between tests — FastAPI route handlers and the
-scrape pipeline both open their own committed transactions, so the
-SAVEPOINT-based isolation in the top-level ``conftest.py`` doesn't fit.
+Like the pipeline tests, these run against the session-scoped engine and
+TRUNCATE between tests — FastAPI route handlers and the scrape pipeline both
+open their own committed transactions, so the SAVEPOINT-based isolation in
+the top-level ``conftest.py`` doesn't fit.
 """
 
 from __future__ import annotations
@@ -16,8 +16,7 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from testcontainers.postgres import PostgresContainer  # type: ignore[import-untyped]
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from veilleur.scraper import FakePassePartout
 
@@ -61,18 +60,12 @@ def configure_api_token(alembic_upgraded: None) -> Iterator[None]:
 
 @pytest_asyncio.fixture
 async def api_factory(
-    alembic_upgraded: None, pg_container: PostgresContainer
+    alembic_upgraded: None, pg_engine: AsyncEngine
 ) -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     """Truncating session factory shared between pipeline and FastAPI."""
-    async_url = (
-        f"postgresql+asyncpg://{pg_container.username}:{pg_container.password}"
-        f"@{pg_container.get_container_host_ip()}:{pg_container.get_exposed_port(5432)}"
-        f"/{pg_container.dbname}"
-    )
-    engine = create_async_engine(async_url, future=True)
-    factory = async_sessionmaker(bind=engine, expire_on_commit=False, class_=AsyncSession)
+    factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, class_=AsyncSession)
 
-    async with engine.begin() as conn:
+    async with pg_engine.begin() as conn:
         await conn.execute(
             text(
                 "TRUNCATE TABLE feed_items, scrape_runs, xpath_extractors, feeds"
@@ -80,23 +73,23 @@ async def api_factory(
             )
         )
 
-    try:
-        yield factory
-    finally:
-        await engine.dispose()
+    yield factory
 
 
 @pytest_asyncio.fixture
 async def api_app(
     configure_api_token: None,
     api_factory: async_sessionmaker[AsyncSession],
+    pg_engine: AsyncEngine,
 ) -> AsyncIterator[FastAPI]:
-    """Reset the lazy global engine so ``run_scrape`` and the route's session
-    dependency both bind to the testcontainer."""
+    """Wire ``run_scrape`` and the route's session dependency to the shared
+    test engine so each test reuses the same connection pool."""
     from veilleur.db import session as db_session
 
-    db_session._engine = None  # type: ignore[attr-defined]
-    db_session._session_factory = None  # type: ignore[attr-defined]
+    db_session._engine = pg_engine  # type: ignore[attr-defined]
+    db_session._session_factory = async_sessionmaker(  # type: ignore[attr-defined]
+        bind=pg_engine, expire_on_commit=False, class_=AsyncSession
+    )
 
     from veilleur.app import app
 
