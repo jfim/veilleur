@@ -25,8 +25,8 @@ test:
 test-live:
     uv run pytest -m live
 
-# Run dev server
-run:
+# Run dev server (applies migrations first)
+run: db-upgrade
     uv run uvicorn veilleur.app:app --reload --reload-dir veilleur --reload-exclude '.claude/*'
 
 # Lint + typecheck + test
