@@ -313,7 +313,7 @@ async def prompt_settings_save(
     if xpath_prompt.prompt_override_path() is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="VEILLEUR_PROMPT_FILE is not configured; prompt edits are disabled",
+            detail="PROMPT_FILE is not configured; prompt edits are disabled",
         )
     overridden = xpath_prompt.save_template(prompt)
     return _render(
@@ -335,7 +335,7 @@ async def prompt_settings_reset(request: Request) -> Response:
     if xpath_prompt.prompt_override_path() is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="VEILLEUR_PROMPT_FILE is not configured; prompt edits are disabled",
+            detail="PROMPT_FILE is not configured; prompt edits are disabled",
         )
     xpath_prompt.reset_to_default()
     return _redirect(str(request.url_for("prompt_settings")))

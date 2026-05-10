@@ -8,7 +8,7 @@ Each call to :func:`derive_xpath` runs a short feedback loop:
 3. Run that xpath against the same parsed tree, mapping matched
    ``<a>`` elements back to their numeric ids by Python object identity.
 4. If intended == actual, return the xpath. Otherwise feed the diff back
-   and let the model try again, up to ``VEILLEUR_XPATH_MAX_ATTEMPTS``
+   and let the model try again, up to ``XPATH_MAX_ATTEMPTS``
    turns.
 
 Provider-agnostic: depends only on the :class:`LLMClient` Protocol.
@@ -38,7 +38,7 @@ from veilleur.xpath.types import (
 )
 
 #: Bundled default. Kept as a re-export for back-compat; the active
-#: template (potentially overridden via ``VEILLEUR_PROMPT_FILE``) is
+#: template (potentially overridden via ``PROMPT_FILE``) is
 #: resolved per-call by :func:`render_prompt`.
 PROMPT_TEMPLATE = DEFAULT_PROMPT_TEMPLATE
 
@@ -92,7 +92,7 @@ def render_prompt(
 ) -> str:
     """Render the active prompt with anchors and optional feedback substituted.
 
-    Honors ``VEILLEUR_PROMPT_FILE`` via :func:`load_active_template`. Custom
+    Honors ``PROMPT_FILE`` via :func:`load_active_template`. Custom
     templates that don't include a ``{previous_attempts}`` placeholder will
     still work — the iterative loop just won't be able to feed prior
     diagnostics back into the prompt for those overrides.
@@ -434,9 +434,9 @@ def _resolve_max_attempts() -> int:
     try:
         from veilleur.config import get_settings
 
-        return int(get_settings().VEILLEUR_XPATH_MAX_ATTEMPTS)
+        return int(get_settings().XPATH_MAX_ATTEMPTS)
     except Exception:
-        raw = os.environ.get("VEILLEUR_XPATH_MAX_ATTEMPTS", "3")
+        raw = os.environ.get("XPATH_MAX_ATTEMPTS", "3")
         try:
             return int(raw)
         except ValueError:

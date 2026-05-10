@@ -1,6 +1,6 @@
 """Bearer-token authentication for the REST API.
 
-Per ``RESOLUTIONS.md``: when ``VEILLEUR_API_BEARER_TOKEN`` is unset the API
+Per ``RESOLUTIONS.md``: when ``API_BEARER_TOKEN`` is unset the API
 rejects every programmatic request. ``/healthz`` is wired separately (it is
 not behind this dependency).
 """
@@ -22,7 +22,7 @@ async def require_bearer_token(
     Raises 401 when the configured token is unset, when the header is
     missing or malformed, or when the supplied token does not match.
     """
-    expected = get_settings().VEILLEUR_API_BEARER_TOKEN
+    expected = get_settings().API_BEARER_TOKEN
     if expected is None or expected.get_secret_value() == "":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

@@ -24,7 +24,7 @@ def test_settings_defaults(monkeypatch: MonkeyPatch) -> None:
     s = Settings(_env_file=None)  # type: ignore[call-arg]
     assert s.POSTGRES_DB == "veilleur"
     assert s.LOG_LEVEL == "INFO"
-    assert s.VEILLEUR_XPATH_MAX_ANCHORS == 250
+    assert s.XPATH_MAX_ANCHORS == 250
     assert s.database_url_async.startswith("postgresql+asyncpg://")
     assert s.database_url_sync.startswith("postgresql+psycopg://")
 

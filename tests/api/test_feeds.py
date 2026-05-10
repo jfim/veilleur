@@ -52,17 +52,17 @@ async def test_wrong_bearer_token_rejected(api_client: httpx.AsyncClient) -> Non
 async def test_unset_token_rejects_all(
     api_app: FastAPI, api_client: httpx.AsyncClient
 ) -> None:
-    """When VEILLEUR_API_BEARER_TOKEN is unset, every API call is rejected."""
+    """When API_BEARER_TOKEN is unset, every API call is rejected."""
     from veilleur.config import get_settings
 
-    old = os.environ.pop("VEILLEUR_API_BEARER_TOKEN", None)
+    old = os.environ.pop("API_BEARER_TOKEN", None)
     get_settings.cache_clear()
     try:
         r = await api_client.get("/feeds")
         assert r.status_code == 401
     finally:
         if old is not None:
-            os.environ["VEILLEUR_API_BEARER_TOKEN"] = old
+            os.environ["API_BEARER_TOKEN"] = old
         get_settings.cache_clear()
 
 

@@ -433,12 +433,12 @@ async def test_raw_html_written_to_disk_when_configured(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """When VEILLEUR_RAW_HTML_DIR is set, raw HTML is gzipped to disk and only the path
+    """When RAW_HTML_DIR is set, raw HTML is gzipped to disk and only the path
     is recorded on the scrape_run row."""
     from veilleur.config import get_settings
     from veilleur.scraper import read_html
 
-    monkeypatch.setenv("VEILLEUR_RAW_HTML_DIR", str(tmp_path))
+    monkeypatch.setenv("RAW_HTML_DIR", str(tmp_path))
     get_settings.cache_clear()
     try:
         feed_id = await _make_feed(pipeline_factory)

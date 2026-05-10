@@ -44,20 +44,20 @@ class Settings(BaseSettings):
 
     # Inbound API auth (Phase 1: optional; when unset, programmatic API rejects all
     # requests except /healthz)
-    VEILLEUR_API_BEARER_TOKEN: SecretStr | None = None
+    API_BEARER_TOKEN: SecretStr | None = None
 
     # Phase 3 — declared here for parity, used later
-    VEILLEUR_XPATH_MAX_ANCHORS: int = 250
+    XPATH_MAX_ANCHORS: int = 250
 
     # Optional override path for the xpath-derivation prompt template.
     # File absence == use bundled default. See `veilleur.xpath.prompt`.
-    VEILLEUR_PROMPT_FILE: Path | None = None
+    PROMPT_FILE: Path | None = None
 
     # Maximum LLM turns when deriving an xpath. Each turn the model proposes
     # an xpath plus its intended id set; we run it and feed back the diff.
     # The loop stops as soon as intended == actual, the model says ``unable``,
     # or this cap is reached.
-    VEILLEUR_XPATH_MAX_ATTEMPTS: int = 3
+    XPATH_MAX_ATTEMPTS: int = 3
 
     # Scrape defaults (consumed later)
     SCRAPE_DEFAULT_INTERVAL_SECONDS: int = 3600
@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     # When unset (the default), raw HTML is not persisted anywhere.
     # When set, must be an absolute, writable directory; the scraper writes
     # ``{raw_html_dir}/{feed_uuid}/{year}/{month}/{ts}-{run_short}.html.gz``.
-    VEILLEUR_RAW_HTML_DIR: Path | None = None
+    RAW_HTML_DIR: Path | None = None
 
     @property
     def database_url_async(self) -> str:

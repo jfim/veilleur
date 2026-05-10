@@ -16,30 +16,30 @@ from veilleur.xpath.types import Anchor
 
 @pytest.fixture
 def configured_prompt_file(tmp_path: Path) -> Iterator[Path]:
-    """Point ``VEILLEUR_PROMPT_FILE`` at a temp path for the duration of a test."""
+    """Point ``PROMPT_FILE`` at a temp path for the duration of a test."""
     target = tmp_path / "prompt.txt"
-    old = os.environ.get("VEILLEUR_PROMPT_FILE")
-    os.environ["VEILLEUR_PROMPT_FILE"] = str(target)
+    old = os.environ.get("PROMPT_FILE")
+    os.environ["PROMPT_FILE"] = str(target)
     get_settings.cache_clear()
     try:
         yield target
     finally:
         if old is None:
-            os.environ.pop("VEILLEUR_PROMPT_FILE", None)
+            os.environ.pop("PROMPT_FILE", None)
         else:
-            os.environ["VEILLEUR_PROMPT_FILE"] = old
+            os.environ["PROMPT_FILE"] = old
         get_settings.cache_clear()
 
 
 @pytest.fixture
 def unconfigured_prompt_file() -> Iterator[None]:
-    old = os.environ.pop("VEILLEUR_PROMPT_FILE", None)
+    old = os.environ.pop("PROMPT_FILE", None)
     get_settings.cache_clear()
     try:
         yield
     finally:
         if old is not None:
-            os.environ["VEILLEUR_PROMPT_FILE"] = old
+            os.environ["PROMPT_FILE"] = old
         get_settings.cache_clear()
 
 
@@ -96,18 +96,18 @@ def test_reset_to_default_no_op_when_absent(configured_prompt_file: Path) -> Non
 
 def test_save_creates_parent_dirs(tmp_path: Path) -> None:
     nested = tmp_path / "config" / "prompts" / "active.txt"
-    os.environ["VEILLEUR_PROMPT_FILE"] = str(nested)
+    os.environ["PROMPT_FILE"] = str(nested)
     get_settings.cache_clear()
     try:
         xpath_prompt.save_template("nested override")
         assert nested.read_text(encoding="utf-8") == "nested override"
     finally:
-        os.environ.pop("VEILLEUR_PROMPT_FILE", None)
+        os.environ.pop("PROMPT_FILE", None)
         get_settings.cache_clear()
 
 
 def test_save_raises_when_unconfigured(unconfigured_prompt_file: None) -> None:
-    with pytest.raises(RuntimeError, match="VEILLEUR_PROMPT_FILE"):
+    with pytest.raises(RuntimeError, match="PROMPT_FILE"):
         xpath_prompt.save_template("anything")
 
 

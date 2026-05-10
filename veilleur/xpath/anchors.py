@@ -26,23 +26,23 @@ from veilleur.xpath.types import (
 )
 
 #: Default cap on the number of anchors returned before LLM derivation.
-#: Overridden by the ``VEILLEUR_XPATH_MAX_ANCHORS`` environment variable
+#: Overridden by the ``XPATH_MAX_ANCHORS`` environment variable
 #: at call time. Per the Phase 3 resolutions.
 DEFAULT_MAX_ANCHORS: int = 250
 
 
 def _max_anchors() -> int:
-    raw = os.environ.get("VEILLEUR_XPATH_MAX_ANCHORS")
+    raw = os.environ.get("XPATH_MAX_ANCHORS")
     if raw is None or raw == "":
         return DEFAULT_MAX_ANCHORS
     try:
         value = int(raw)
     except ValueError as exc:
         raise AnchorExtractionError(
-            f"VEILLEUR_XPATH_MAX_ANCHORS must be an integer, got {raw!r}"
+            f"XPATH_MAX_ANCHORS must be an integer, got {raw!r}"
         ) from exc
     if value <= 0:
-        raise AnchorExtractionError(f"VEILLEUR_XPATH_MAX_ANCHORS must be positive, got {value}")
+        raise AnchorExtractionError(f"XPATH_MAX_ANCHORS must be positive, got {value}")
     return value
 
 

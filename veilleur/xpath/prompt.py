@@ -4,7 +4,7 @@ The prompt that drives :func:`veilleur.xpath.derive.derive_xpath` ships
 with a sensible default, but operators routinely want to tweak it
 without rebuilding the image. Convention:
 
-- ``settings.VEILLEUR_PROMPT_FILE`` (env: ``VEILLEUR_VEILLEUR_PROMPT_FILE``)
+- ``settings.PROMPT_FILE`` (env: ``PROMPT_FILE``)
   optionally points at an override path. When unset, the default is
   used unconditionally.
 - File **absence** means "use the bundled default". File **presence**
@@ -46,7 +46,7 @@ If no xpath can match all article links and only article links, reply with the s
 
 def prompt_override_path() -> Path | None:
     """Configured override path, or ``None`` if no override is configured."""
-    return get_settings().VEILLEUR_PROMPT_FILE
+    return get_settings().PROMPT_FILE
 
 
 def _normalize(text: str) -> str:
@@ -92,12 +92,12 @@ def save_template(text: str) -> bool:
     if the system is now back on the default.
 
     Raises:
-        RuntimeError: If ``VEILLEUR_PROMPT_FILE`` is not configured.
+        RuntimeError: If ``PROMPT_FILE`` is not configured.
     """
     path = prompt_override_path()
     if path is None:
         raise RuntimeError(
-            "VEILLEUR_PROMPT_FILE is not configured; cannot persist prompt overrides"
+            "PROMPT_FILE is not configured; cannot persist prompt overrides"
         )
     if is_default(text):
         reset_to_default()
