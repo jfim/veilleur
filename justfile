@@ -13,6 +13,10 @@ lint:
 format:
     uv run ruff format .
 
+# Verify formatting without writing
+format-check:
+    uv run ruff format --check .
+
 # Type-check with pyright
 typecheck:
     uv run pyright
@@ -29,8 +33,8 @@ test-live:
 run: db-upgrade
     uv run uvicorn veilleur.app:app --reload --reload-dir veilleur --reload-exclude '.claude/*'
 
-# Lint + typecheck + test
-check: lint typecheck test
+# Lint + format-check + typecheck + test
+check: lint format-check typecheck test
 
 # Bring up dev postgres
 db-up:
