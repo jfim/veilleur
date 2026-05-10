@@ -332,6 +332,19 @@ async def _try_regenerate_or_fail(
             raw_html=fetch.html,
             xpath_attempts=None,
         )
+    except XPathToolkitError as exc:
+        # Catches LLMClientError and any other toolkit-level failure
+        # (transport, auth, malformed reply) so the scrape_run row is
+        # finalized as failed rather than left orphaned at "running".
+        return await _finalize_failure(
+            factory,
+            run_id,
+            feed_id,
+            f"regenerate failed ({reason}): {exc}",
+            http_status=fetch.status_code,
+            raw_html=fetch.html,
+            xpath_attempts=None,
+        )
     new_xpath = outcome.xpath
     attempts_serialized = _serialize_attempts(outcome.attempts)
     try:
@@ -476,7 +489,7 @@ async def _persist_items(
         result = await session.execute(stmt)
         # rows where first_seen_at == now means a freshly inserted item
         rows_returned = list(result.all())
-        new_count = sum(1 for _id, fs in rows_returned if fs == now)
+        new_count = sum(1 for _, fs in rows_returned if fs == now)
         await session.commit()
         return (len(items), new_count)
 

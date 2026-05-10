@@ -19,6 +19,7 @@ The concrete :class:`HttpxLLMClient` here speaks the OpenAI-compatible
 
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 from dataclasses import dataclass
@@ -488,7 +489,12 @@ class HttpxLLMClient:
         return cls(api_url=api_url, model=model, api_key=api_key, http=http)
 
     async def complete(self, prompt: str) -> str:
-        """Send a single user-turn prompt and return the assistant's text."""
+        """Send a single user-turn prompt and return the assistant's text.
+
+        Transport errors and retryable HTTP statuses (429, 5xx) are retried
+        with exponential backoff before surfacing as :class:`LLMClientError`.
+        Non-retryable HTTP errors (4xx other than 429) fail immediately.
+        """
         endpoint = f"{self._api_url}/chat/completions"
         payload: dict[str, Any] = {
             "model": self._model,
@@ -499,13 +505,43 @@ class HttpxLLMClient:
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
         }
-        try:
-            response = await self._http.post(endpoint, json=payload, headers=headers)
-        except httpx.HTTPError as exc:
-            raise LLMClientError(f"transport error calling {endpoint}: {exc}") from exc
 
-        if response.status_code < 200 or response.status_code >= 300:
-            raise LLMClientError(f"LLM returned HTTP {response.status_code}: {response.text[:500]}")
+        max_retries = 3
+        backoff = 1.0
+        last_exc: Exception | None = None
+        last_status: int | None = None
+        last_body: str | None = None
+        for attempt in range(1, max_retries + 1):
+            try:
+                response = await self._http.post(endpoint, json=payload, headers=headers)
+            except httpx.HTTPError as exc:
+                last_exc = exc
+                if attempt == max_retries:
+                    raise LLMClientError(
+                        f"transport error calling {endpoint} after {max_retries} attempts: {exc}"
+                    ) from exc
+                await asyncio.sleep(backoff)
+                backoff *= 2
+                continue
+
+            status = response.status_code
+            if 200 <= status < 300:
+                break
+            if status == 429 or 500 <= status < 600:
+                last_status = status
+                last_body = response.text[:500]
+                if attempt == max_retries:
+                    raise LLMClientError(
+                        f"LLM returned HTTP {status} after {max_retries} attempts: {last_body}"
+                    )
+                await asyncio.sleep(backoff)
+                backoff *= 2
+                continue
+            raise LLMClientError(f"LLM returned HTTP {status}: {response.text[:500]}")
+        else:  # pragma: no cover - loop always breaks or raises
+            if last_exc is not None:
+                raise LLMClientError(f"transport error calling {endpoint}: {last_exc}") from last_exc
+            raise LLMClientError(f"LLM returned HTTP {last_status}: {last_body}")
 
         try:
             data: Any = response.json()
