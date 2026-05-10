@@ -73,6 +73,13 @@ class Settings(BaseSettings):
     SCHEDULER_ENABLED: bool = True
     SCHEDULER_TICK_SECONDS: float = 30.0
 
+    # Comma-separated list of trusted proxy IPs whose ``X-Forwarded-*``
+    # headers we honour. Set to ``*`` when running behind a proxy you control
+    # (Docker network, reverse proxy doing TLS termination) so generated URLs
+    # use the external scheme/host. Defaults to localhost only — safe but
+    # ineffective when the proxy is on a different host.
+    FORWARDED_ALLOW_IPS: str = "127.0.0.1"
+
     # Filesystem storage for raw fetched HTML.
     # When unset (the default), raw HTML is not persisted anywhere.
     # When set, must be an absolute, writable directory; the scraper writes

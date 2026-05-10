@@ -17,6 +17,7 @@ import httpx
 from fastapi import Depends, FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -138,6 +139,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 
 app = FastAPI(title="Veilleur", version="0.1.0", lifespan=lifespan)
+# Honour ``X-Forwarded-Proto``/``X-Forwarded-For`` so ``request.url_for`` and
+# redirects use the external scheme (https) when behind a TLS-terminating
+# proxy. Without this, generated form URLs come back as ``http://``.
+app.add_middleware(
+    ProxyHeadersMiddleware,
+    trusted_hosts=get_settings().FORWARDED_ALLOW_IPS,
+)
 # Public RSS/Atom routes must be registered *before* the bearer-protected
 # router so that overlapping paths (e.g. ``/feeds/{id}/rss``) match the
 # unauthenticated handler first.
