@@ -322,7 +322,14 @@ async def test_httpx_client_strips_trailing_slash_on_api_url() -> None:
     assert captured["url"] == "https://api.example.com/v1/chat/completions"
 
 
-async def test_httpx_client_non_2xx_raises() -> None:
+async def test_httpx_client_non_2xx_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    import asyncio
+
+    async def _no_sleep(_: float) -> None:
+        return
+
+    monkeypatch.setattr(asyncio, "sleep", _no_sleep)
+
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(500, text="server error")
 
@@ -338,7 +345,14 @@ async def test_httpx_client_non_2xx_raises() -> None:
             await client.complete("p")
 
 
-async def test_httpx_client_transport_error_raises() -> None:
+async def test_httpx_client_transport_error_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    import asyncio
+
+    async def _no_sleep(_: float) -> None:
+        return
+
+    monkeypatch.setattr(asyncio, "sleep", _no_sleep)
+
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("boom")
 
