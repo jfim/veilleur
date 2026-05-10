@@ -137,6 +137,15 @@ th {
 .status-active { color: var(--success); }
 .status-paused { color: var(--warning); }
 .status-failed { color: var(--danger); }
+.status-running { color: var(--fg-muted); font-style: italic; }
+.status-reprocessing {
+    color: var(--danger);
+}
+.status-reprocessing .reprocessing-suffix {
+    color: var(--fg-muted);
+    font-style: italic;
+    font-weight: normal;
+}
 
 .failure-reason {
     color: var(--danger);
@@ -189,4 +198,14 @@ pre.xpath {
 .flash.error {
     border-color: var(--danger);
     color: var(--danger);
+}
+
+.flash.success {
+    border-color: var(--success);
+    color: var(--success);
+}
+
+.flash.info {
+    border-color: var(--border);
+    color: var(--fg-muted);
 }

@@ -63,6 +63,12 @@ class ScrapeRun(Base):
     xpath_attempts: Mapped[list[dict[str, object]] | None] = mapped_column(
         JSONB, nullable=True
     )
+    # Free-form pipeline step name set while a run is in flight; cleared back
+    # to NULL once the run reaches a terminal status. Used by the UI to show
+    # operators what the scraper is currently doing. Convention values:
+    # ``fetching``, ``extracting_anchors``, ``applying_xpath``,
+    # ``deriving_xpath``, ``validating``, ``persisting``.
+    current_step: Mapped[str | None] = mapped_column(nullable=True)
 
     feed: Mapped[Feed] = relationship("Feed", back_populates="scrape_runs")
     xpath_extractor: Mapped[XPathExtractor | None] = relationship("XPathExtractor")

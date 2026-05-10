@@ -19,6 +19,14 @@
     <a href="{{ url_for('get_atom', feed_id=feed.id) }}">Atom</a>
 </p>
 
+{% if inflight_run %}
+    <p class="status-running">
+        Scrape in progress —
+        <strong>{{ inflight_run.current_step or 'starting' }}</strong>
+        (auto-refreshing).
+    </p>
+{% endif %}
+
 <h3>Actions</h3>
 <div class="actions">
     <form method="post" action="{{ url_for('scrape_feed_form', feed_id=feed.id) }}">
@@ -111,8 +119,8 @@
     {% for run in runs %}
         <tr>
             <td>{{ run.started_at|datetime }}</td>
-            <td class="status-{{ 'failed' if run.status == 'failed' else 'active' }}">
-                {{ run.status }}
+            <td class="status-{{ 'running' if run.status == 'running' else ('failed' if run.status == 'failed' else 'active') }}">
+                {{ run.status }}{% if run.status == 'running' %} — {{ run.current_step or '…' }}{% endif %}
             </td>
             <td>{{ run.items_seen }}</td>
             <td>{{ run.items_new }}</td>

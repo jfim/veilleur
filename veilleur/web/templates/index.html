@@ -47,7 +47,9 @@
                 </a>
                 <div class="muted" style="font-size: 0.8rem;">{{ row.feed.url }}</div>
             </td>
-            <td class="status-{{ row.feed.status }}">{{ row.feed.status }}</td>
+            <td class="status-{{ 'reprocessing' if row.feed.status == 'failed' and row.reprocessing else row.feed.status }}">
+                {{ row.feed.status }}{% if row.feed.status == 'failed' and row.reprocessing %} <span class="reprocessing-suffix">(reprocessing)</span>{% elif row.reprocessing %} <span class="reprocessing-suffix">· running</span>{% endif %}
+            </td>
             <td>{{ row.feed.last_scraped_at|datetime or "—" }}</td>
             <td>{{ row.item_count }}</td>
             <td>

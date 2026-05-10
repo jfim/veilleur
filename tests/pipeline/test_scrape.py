@@ -533,3 +533,99 @@ async def test_lock_does_not_span_llm_call(
     assert "https://a.example.com/" in scraper.calls
     assert "https://b.example.com/" in scraper.calls
 
+
+# --- Issue #40: pipeline-step visibility -------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_current_step_cleared_on_success(
+    pipeline_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A finalized successful run leaves ``current_step`` as NULL."""
+    feed_id = await _make_feed(pipeline_factory)
+    scraper = FakePassePartout()
+    scraper.register("https://example.com/", html=HTML_INITIAL)
+
+    outcome = await run_scrape(
+        feed_id,
+        scraper=scraper,
+        llm=FakeLLMClient([REPLY_GOOD]),
+        session_factory=pipeline_factory,
+    )
+    assert outcome.status == "xpath_regenerated"
+
+    async with pipeline_factory() as s:
+        run = await s.get(ScrapeRun, outcome.scrape_run_id)
+        assert run is not None
+        assert run.current_step is None
+
+
+@pytest.mark.asyncio
+async def test_current_step_cleared_on_failure(
+    pipeline_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A finalized failed run also leaves ``current_step`` as NULL."""
+    from veilleur.scraper import PassePartoutUnavailable
+
+    feed_id = await _make_feed(pipeline_factory)
+    scraper = FakePassePartout()
+    scraper.register_error(
+        "https://example.com/", PassePartoutUnavailable("upstream down")
+    )
+
+    outcome = await run_scrape(
+        feed_id,
+        scraper=scraper,
+        llm=FakeLLMClient([]),
+        session_factory=pipeline_factory,
+    )
+    assert outcome.status == "failed"
+
+    async with pipeline_factory() as s:
+        run = await s.get(ScrapeRun, outcome.scrape_run_id)
+        assert run is not None
+        assert run.current_step is None
+
+
+@pytest.mark.asyncio
+async def test_current_step_set_during_in_flight_run(
+    pipeline_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A concurrent reader sees ``current_step`` populated while a slow LLM
+    derivation holds the pipeline in the deriving_xpath stage."""
+    feed_id = await _make_feed(pipeline_factory)
+    scraper = FakePassePartout()
+    scraper.register("https://example.com/", html=HTML_INITIAL)
+
+    seen_step: list[str | None] = []
+    derive_started = asyncio.Event()
+    derive_release = asyncio.Event()
+
+    class SteppedLLMClient:
+        async def complete(self, prompt: str) -> str:
+            derive_started.set()
+            await derive_release.wait()
+            return REPLY_GOOD
+
+    async def watcher() -> None:
+        await derive_started.wait()
+        async with pipeline_factory() as s:
+            row = (
+                await s.execute(
+                    select(ScrapeRun).where(ScrapeRun.feed_id == feed_id)
+                )
+            ).scalar_one()
+            seen_step.append(row.current_step)
+        derive_release.set()
+
+    async def runner() -> None:
+        await run_scrape(
+            feed_id,
+            scraper=scraper,
+            llm=SteppedLLMClient(),
+            session_factory=pipeline_factory,
+        )
+
+    await asyncio.wait_for(asyncio.gather(runner(), watcher()), timeout=10.0)
+    assert seen_step == ["deriving_xpath"]
+

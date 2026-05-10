@@ -73,6 +73,23 @@ async def _locked_fetch(scraper: Scraper, url: str) -> FetchResult:
         return await scraper.fetch(url)
 
 
+async def _set_step(
+    factory: async_sessionmaker[AsyncSession],
+    run_id: uuid.UUID,
+    step: str,
+) -> None:
+    """Update ``scrape_runs.current_step`` so the in-flight UI poll sees it.
+
+    Each call opens its own session and commits immediately — the long-lived
+    LLM call would otherwise hide intermediate state from concurrent readers.
+    """
+    async with factory() as session:
+        run = await session.get(ScrapeRun, run_id)
+        assert run is not None
+        run.current_step = step
+        await session.commit()
+
+
 @dataclass(frozen=True, slots=True)
 class ScrapeOutcome:
     """Result of one ``run_scrape`` call."""
@@ -144,6 +161,7 @@ async def _run(
         )
 
     # --- 2. Fetch (single-flight via _FETCH_LOCK) ----------------------------
+    await _set_step(factory, run_id, "fetching")
     try:
         fetch = await _locked_fetch(scraper, feed_url)
     except UnsupportedContentType as exc:
@@ -157,6 +175,7 @@ async def _run(
 
 
     # --- 3. Extract anchors --------------------------------------------------
+    await _set_step(factory, run_id, "extracting_anchors")
     try:
         anchors = extract_anchors(fetch.html, fetch.final_url)
     except AnchorExtractionError as exc:
@@ -194,6 +213,7 @@ async def _run(
         )
 
     if active_xpath is not None:
+        await _set_step(factory, run_id, "applying_xpath")
         try:
             items = apply_xpath(fetch.html, fetch.final_url, active_xpath)
         except XPathToolkitError as exc:
@@ -209,6 +229,7 @@ async def _run(
                 reason=f"existing xpath unusable: {exc}",
                 strict=prev_links is not None,
             )
+        await _set_step(factory, run_id, "validating")
         decision = validate(prev_links, [it.url for it in items])
         match decision:
             case Ok() | FirstRun():
@@ -236,6 +257,7 @@ async def _run(
                 )
     else:
         # No active extractor — derive one.
+        await _set_step(factory, run_id, "deriving_xpath")
         try:
             outcome = await derive_xpath(
                 anchors.title,
@@ -257,6 +279,7 @@ async def _run(
             )
         new_xpath = outcome.xpath
         derive_attempts: tuple[XPathAttempt, ...] = outcome.attempts
+        await _set_step(factory, run_id, "applying_xpath")
         try:
             items = apply_xpath(fetch.html, fetch.final_url, new_xpath)
         except XPathToolkitError as exc:
@@ -277,6 +300,7 @@ async def _run(
         derive_attempts_serialized = _serialize_attempts(derive_attempts)
 
     # --- 6 + 7. Persist items + finalize -------------------------------------
+    await _set_step(factory, run_id, "persisting")
     items_seen, items_new = await _persist_items(factory, feed_id, items, run_id)
     await _finalize_success(
         factory=factory,
@@ -313,6 +337,7 @@ async def _try_regenerate_or_fail(
 ) -> ScrapeOutcome:
     """One regeneration attempt; on any failure mark the feed failed."""
     attempts_serialized: list[dict[str, object]] | None = None
+    await _set_step(factory, run_id, "deriving_xpath")
     try:
         outcome = await derive_xpath(
             anchors.title,
@@ -347,6 +372,7 @@ async def _try_regenerate_or_fail(
         )
     new_xpath = outcome.xpath
     attempts_serialized = _serialize_attempts(outcome.attempts)
+    await _set_step(factory, run_id, "applying_xpath")
     try:
         items = apply_xpath(fetch.html, fetch.final_url, new_xpath)
     except XPathToolkitError as exc:
@@ -361,6 +387,7 @@ async def _try_regenerate_or_fail(
         )
 
     if strict and prev_links is not None:
+        await _set_step(factory, run_id, "validating")
         re_decision = validate(prev_links, [it.url for it in items])
         if not isinstance(re_decision, (Ok, FirstRun)):
             reason_text = re_decision.reason
@@ -377,6 +404,7 @@ async def _try_regenerate_or_fail(
     new_extractor_id = await _persist_new_extractor(
         factory, feed_id, new_xpath, _resolve_llm_model()
     )
+    await _set_step(factory, run_id, "persisting")
     items_seen, items_new = await _persist_items(factory, feed_id, items, run_id)
     await _finalize_success(
         factory=factory,
@@ -519,6 +547,7 @@ async def _finalize_success(
         run.items_seen = items_seen
         run.items_new = items_new
         run.http_status = http_status
+        run.current_step = None
         if raw_html_path is not None:
             run.raw_html_path = raw_html_path
         if new_extractor_id is not None:
@@ -556,6 +585,7 @@ async def _finalize_failure(
         run.finished_at = finished_at
         run.error_message = error_message
         run.http_status = http_status
+        run.current_step = None
         if raw_html_path is not None:
             run.raw_html_path = raw_html_path
         if xpath_attempts is not None:
