@@ -1,0 +1,19 @@
+name: ghcr-cleanup
+
+on:
+  schedule:
+    - cron: "0 4 * * 0"
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - uses: dataaxiom/ghcr-cleanup-action@v1
+        with:
+          package: veilleur
+          delete-untagged: true
+          keep-n-tagged: 10
+          exclude-tags: latest,master,main,v*,*.*,*.*.*
