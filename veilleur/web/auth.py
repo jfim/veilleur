@@ -35,7 +35,10 @@ async def require_basic_auth(
     authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> None:
     """Enforce HTTP Basic with the bearer token as the password."""
-    expected = get_settings().API_BEARER_TOKEN
+    settings = get_settings()
+    if settings.API_AUTH_DISABLED:
+        return
+    expected = settings.API_BEARER_TOKEN
     if expected is None or expected.get_secret_value() == "":
         raise _unauthorized("API authentication is not configured")
     if not authorization or not authorization.lower().startswith("basic "):

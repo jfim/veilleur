@@ -22,7 +22,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from veilleur.api.routes import api_router
-from veilleur.config import get_settings
+from veilleur.config import Settings, get_settings
 from veilleur.db.session import get_session, get_session_factory
 from veilleur.feeds import feeds_public_router
 from veilleur.pipeline import ScrapeOutcome, run_scrape
@@ -34,30 +34,47 @@ from veilleur.xpath import HttpxLLMClient
 logger = logging.getLogger(__name__)
 
 
-def _build_scheduler() -> tuple[SchedulerLoop, list[object]] | None:
+def _validate_startup_config(settings: Settings) -> None:
+    """Fail fast when required env vars are missing.
+
+    The REST API, the web UI, and the scrape pipeline each have a hard
+    dependency on a small set of values; without them the app would either
+    reject every request or surface confusing mid-scrape errors. We raise
+    here so the operator sees the problem at boot, not on the first hit.
+    """
+    problems: list[str] = []
+    if settings.API_BEARER_TOKEN is None and not settings.API_AUTH_DISABLED:
+        problems.append(
+            "API_BEARER_TOKEN is unset (set it, or set API_AUTH_DISABLED=true"
+            " for unauthenticated local dev)"
+        )
+    if not settings.PASSEPARTOUT_URL:
+        problems.append("PASSEPARTOUT_URL is unset")
+    llm_missing = [
+        name
+        for name, value in (
+            ("LLM_API_URL", settings.LLM_API_URL),
+            ("LLM_MODEL_NAME", settings.LLM_MODEL_NAME),
+            ("LLM_API_KEY", settings.LLM_API_KEY),
+        )
+        if not value
+    ]
+    if llm_missing:
+        problems.append(f"LLM config incomplete: missing {', '.join(llm_missing)}")
+    if problems:
+        raise RuntimeError(
+            "veilleur is misconfigured:\n  - " + "\n  - ".join(problems)
+        )
+
+
+def _build_scheduler() -> tuple[SchedulerLoop, list[object]]:
     """Construct a scheduler against the real scraper + LLM clients.
 
-    Returns ``None`` (and logs a warning) when required outbound config is
-    missing, so a partially-configured deployment can still serve the REST
-    API and feed routes without crashing on startup.
+    Required outbound config is validated upstream by
+    :func:`_validate_startup_config`, so by the time we reach this function
+    the URLs and the LLM credential are guaranteed to be set.
     """
     settings = get_settings()
-    missing: list[str] = []
-    if not settings.PASSEPARTOUT_URL:
-        missing.append("PASSEPARTOUT_URL")
-    if not settings.LLM_API_URL:
-        missing.append("LLM_API_URL")
-    if not settings.LLM_MODEL_NAME:
-        missing.append("LLM_MODEL_NAME")
-    if not settings.LLM_API_KEY:
-        missing.append("LLM_API_KEY")
-    if missing:
-        logger.warning(
-            "scheduler disabled: missing required env vars: %s",
-            ", ".join(missing),
-        )
-        return None
-
     pp_token = (
         settings.PASSEPARTOUT_BEARER_TOKEN.get_secret_value()
         if settings.PASSEPARTOUT_BEARER_TOKEN
@@ -94,6 +111,7 @@ def _build_scheduler() -> tuple[SchedulerLoop, list[object]] | None:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     settings = get_settings()
+    _validate_startup_config(settings)
     if settings.RAW_HTML_DIR is not None:
         # Fail fast on a misconfigured directory rather than discovering it
         # mid-scrape and silently dropping HTML payloads.
@@ -101,10 +119,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     scheduler: SchedulerLoop | None = None
     owned: list[object] = []
     if settings.SCHEDULER_ENABLED:
-        built = _build_scheduler()
-        if built is not None:
-            scheduler, owned = built
-            scheduler.start()
+        scheduler, owned = _build_scheduler()
+        scheduler.start()
 
     try:
         yield

@@ -42,9 +42,11 @@ class Settings(BaseSettings):
     # General
     LOG_LEVEL: str = "INFO"
 
-    # Inbound API auth (Phase 1: optional; when unset, programmatic API rejects all
-    # requests except /healthz)
+    # Inbound API auth. Startup fails when API_BEARER_TOKEN is unset unless
+    # API_AUTH_DISABLED is true (intended for local dev — the REST API and
+    # web UI then accept all requests with no credential check).
     API_BEARER_TOKEN: SecretStr | None = None
+    API_AUTH_DISABLED: bool = False
 
     # Phase 3 — declared here for parity, used later
     XPATH_MAX_ANCHORS: int = 250
