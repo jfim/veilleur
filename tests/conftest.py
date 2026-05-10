@@ -91,6 +91,33 @@ def pg_info() -> Iterator[PgInfo]:
         )
 
 
+@pytest.fixture(autouse=True, scope="session")
+def stub_required_env() -> Iterator[None]:
+    """Set sentinel values for env vars the app refuses to start without.
+
+    The lifespan handler validates ``API_BEARER_TOKEN`` (or ``API_AUTH_DISABLED``),
+    ``PASSEPARTOUT_URL``, and the LLM credential trio. Tests that use
+    ``TestClient`` would otherwise fail to boot. Tests can still override
+    individual values with ``monkeypatch``.
+    """
+    defaults = {
+        "API_BEARER_TOKEN": "test-bearer-token",
+        "PASSEPARTOUT_URL": "http://passe-partout.test",
+        "LLM_API_URL": "http://llm.test/v1",
+        "LLM_MODEL_NAME": "test-model",
+        "LLM_API_KEY": "test-key",
+    }
+    old = {k: os.environ.get(k) for k in defaults}
+    for k, v in defaults.items():
+        os.environ.setdefault(k, v)
+    yield
+    for k, v in old.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+
+
 @pytest.fixture(scope="session")
 def alembic_upgraded(pg_info: PgInfo) -> Iterator[None]:
     """Run Alembic migrations once per session against the test Postgres."""

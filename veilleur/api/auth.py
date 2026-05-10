@@ -22,7 +22,10 @@ async def require_bearer_token(
     Raises 401 when the configured token is unset, when the header is
     missing or malformed, or when the supplied token does not match.
     """
-    expected = get_settings().API_BEARER_TOKEN
+    settings = get_settings()
+    if settings.API_AUTH_DISABLED:
+        return
+    expected = settings.API_BEARER_TOKEN
     if expected is None or expected.get_secret_value() == "":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
