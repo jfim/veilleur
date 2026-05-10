@@ -49,9 +49,7 @@ async def test_wrong_bearer_token_rejected(api_client: httpx.AsyncClient) -> Non
 
 
 @pytest.mark.asyncio
-async def test_unset_token_rejects_all(
-    api_app: FastAPI, api_client: httpx.AsyncClient
-) -> None:
+async def test_unset_token_rejects_all(api_app: FastAPI, api_client: httpx.AsyncClient) -> None:
     """When API_BEARER_TOKEN is unset, every API call is rejected."""
     from veilleur.config import get_settings
 
@@ -124,9 +122,7 @@ async def test_list_feeds_paginates(
     api_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     for i in range(5):
-        r = await api_client.post(
-            "/feeds", json={"url": f"https://example.com/{i}"}
-        )
+        r = await api_client.post("/feeds", json={"url": f"https://example.com/{i}"})
         assert r.status_code == 201
 
     r = await api_client.get("/feeds", params={"limit": 2})
@@ -135,9 +131,7 @@ async def test_list_feeds_paginates(
     assert len(body["items"]) == 2
     assert body["next_cursor"] is not None
 
-    r2 = await api_client.get(
-        "/feeds", params={"limit": 2, "cursor": body["next_cursor"]}
-    )
+    r2 = await api_client.get("/feeds", params={"limit": 2, "cursor": body["next_cursor"]})
     body2 = r2.json()
     assert len(body2["items"]) == 2
     seen = {it["id"] for it in body["items"]} | {it["id"] for it in body2["items"]}
@@ -158,9 +152,7 @@ async def test_get_unknown_feed_returns_404(api_client: httpx.AsyncClient) -> No
 
 @pytest.mark.asyncio
 async def test_patch_feed(api_client: httpx.AsyncClient) -> None:
-    r = await api_client.post(
-        "/feeds", json={"url": "https://example.com/"}
-    )
+    r = await api_client.post("/feeds", json={"url": "https://example.com/"})
     feed_id = r.json()["id"]
 
     r = await api_client.patch(
@@ -176,9 +168,7 @@ async def test_patch_feed(api_client: httpx.AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_patch_feed_invalid_status(api_client: httpx.AsyncClient) -> None:
-    r = await api_client.post(
-        "/feeds", json={"url": "https://example.com/"}
-    )
+    r = await api_client.post("/feeds", json={"url": "https://example.com/"})
     feed_id = r.json()["id"]
     r = await api_client.patch(f"/feeds/{feed_id}", json={"status": "failed"})
     assert r.status_code == 422

@@ -96,17 +96,13 @@ def save_template(text: str) -> bool:
     """
     path = prompt_override_path()
     if path is None:
-        raise RuntimeError(
-            "PROMPT_FILE is not configured; cannot persist prompt overrides"
-        )
+        raise RuntimeError("PROMPT_FILE is not configured; cannot persist prompt overrides")
     if is_default(text):
         reset_to_default()
         return False
     path.parent.mkdir(parents=True, exist_ok=True)
     # Write to a sibling temp file, then atomic-rename into place.
-    fd, tmp_name = tempfile.mkstemp(
-        prefix=path.name + ".", suffix=".tmp", dir=str(path.parent)
-    )
+    fd, tmp_name = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=str(path.parent))
     tmp_path = Path(tmp_name)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:

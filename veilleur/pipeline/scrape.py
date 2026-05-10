@@ -155,9 +155,7 @@ async def _run(
         run_id = run.id
         feed_url = feed.url
         active_xpath = (
-            feed.active_xpath_extractor.xpath
-            if feed.active_xpath_extractor is not None
-            else None
+            feed.active_xpath_extractor.xpath if feed.active_xpath_extractor is not None else None
         )
 
     # --- 2. Fetch (single-flight via _FETCH_LOCK) ----------------------------
@@ -172,7 +170,6 @@ async def _run(
         return await _finalize_failure(
             factory, run_id, feed_id, str(exc), http_status=None, raw_html=None
         )
-
 
     # --- 3. Extract anchors --------------------------------------------------
     await _set_step(factory, run_id, "extracting_anchors")
@@ -431,11 +428,7 @@ async def _try_regenerate_or_fail(
 
 
 async def _load_feed(session: AsyncSession, feed_id: uuid.UUID) -> Feed | None:
-    stmt = (
-        select(Feed)
-        .where(Feed.id == feed_id)
-        .options(selectinload(Feed.active_xpath_extractor))
-    )
+    stmt = select(Feed).where(Feed.id == feed_id).options(selectinload(Feed.active_xpath_extractor))
     return (await session.execute(stmt)).scalar_one_or_none()
 
 

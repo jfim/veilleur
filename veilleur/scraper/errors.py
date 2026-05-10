@@ -51,7 +51,5 @@ class UnsupportedContentType(FetchError):
     """The target page's Content-Type was not text/html or application/xhtml+xml."""
 
     def __init__(self, content_type: str) -> None:
-        super().__init__(
-            f"server returned {content_type or '<missing>'} instead of text/html"
-        )
+        super().__init__(f"server returned {content_type or '<missing>'} instead of text/html")
         self.content_type = content_type

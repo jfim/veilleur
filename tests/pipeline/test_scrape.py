@@ -115,9 +115,7 @@ async def _make_feed(
         await session.flush()
         feed_id = feed.id
         if active_xpath is not None:
-            extractor = XPathExtractor(
-                feed_id=feed_id, xpath=active_xpath, generated_by="manual"
-            )
+            extractor = XPathExtractor(feed_id=feed_id, xpath=active_xpath, generated_by="manual")
             session.add(extractor)
             await session.flush()
             feed.active_xpath_extractor_id = extractor.id
@@ -138,9 +136,7 @@ async def test_first_run_derives_xpath_and_persists_items(
     scraper.register("https://example.com/", html=HTML_INITIAL)
     llm = FakeLLMClient([REPLY_GOOD])
 
-    outcome = await run_scrape(
-        feed_id, scraper=scraper, llm=llm, session_factory=pipeline_factory
-    )
+    outcome = await run_scrape(feed_id, scraper=scraper, llm=llm, session_factory=pipeline_factory)
 
     assert outcome.error_message is None
     assert outcome.status == "xpath_regenerated"
@@ -156,9 +152,7 @@ async def test_first_run_derives_xpath_and_persists_items(
         assert feed.active_xpath_extractor_id is not None
 
         items = (
-            (await s.execute(select(FeedItem).where(FeedItem.feed_id == feed_id)))
-            .scalars()
-            .all()
+            (await s.execute(select(FeedItem).where(FeedItem.feed_id == feed_id))).scalars().all()
         )
         urls = {it.url for it in items}
         assert urls == {
@@ -185,50 +179,42 @@ async def test_second_run_dedupes_and_updates_last_seen_at(
     scraper.register("https://example.com/", html=HTML_INITIAL)
     llm = FakeLLMClient([])  # no derive expected
 
-    first = await run_scrape(
-        feed_id, scraper=scraper, llm=llm, session_factory=pipeline_factory
-    )
+    first = await run_scrape(feed_id, scraper=scraper, llm=llm, session_factory=pipeline_factory)
     assert first.status == "success"
     assert first.items_new == 3
 
     async with pipeline_factory() as s:
         before = (
-            (
-                await s.execute(
-                    select(FeedItem.url, FeedItem.first_seen_at, FeedItem.last_seen_at)
-                    .where(FeedItem.feed_id == feed_id)
+            await s.execute(
+                select(FeedItem.url, FeedItem.first_seen_at, FeedItem.last_seen_at).where(
+                    FeedItem.feed_id == feed_id
                 )
             )
-            .all()
-        )
+        ).all()
     seen_map = {url: (first_seen, last_seen) for url, first_seen, last_seen in before}
 
     # Second scrape: same xpath, returns post-a (seen) and post-d (new).
     # (FakePassePartout.register overwrites)
     scraper.register("https://example.com/", html=HTML_SECOND)
-    second = await run_scrape(
-        feed_id, scraper=scraper, llm=llm, session_factory=pipeline_factory
-    )
+    second = await run_scrape(feed_id, scraper=scraper, llm=llm, session_factory=pipeline_factory)
     assert second.status == "success"
     assert second.items_seen == 2
     assert second.items_new == 1
 
     async with pipeline_factory() as s:
         after = (
-            (
-                await s.execute(
-                    select(FeedItem.url, FeedItem.first_seen_at, FeedItem.last_seen_at)
-                    .where(FeedItem.feed_id == feed_id)
+            await s.execute(
+                select(FeedItem.url, FeedItem.first_seen_at, FeedItem.last_seen_at).where(
+                    FeedItem.feed_id == feed_id
                 )
             )
-            .all()
-        )
+        ).all()
     by_url = {url: (first_seen, last_seen) for url, first_seen, last_seen in after}
     post_a = "https://example.com/posts/2026/post-a"
     post_d = "https://example.com/posts/2026/post-d"
     assert post_d in by_url and post_d not in seen_map
     assert by_url[post_a][0] == seen_map[post_a][0]  # first_seen unchanged
-    assert by_url[post_a][1] > seen_map[post_a][1]   # last_seen advanced
+    assert by_url[post_a][1] > seen_map[post_a][1]  # last_seen advanced
 
 
 @pytest.mark.asyncio
@@ -252,9 +238,7 @@ async def test_regenerate_when_xpath_breaks(
     scraper.register("https://example.com/", html=HTML_RESTRUCTURED)
     llm = FakeLLMClient([REPLY_RESTRUCTURED])
 
-    second = await run_scrape(
-        feed_id, scraper=scraper, llm=llm, session_factory=pipeline_factory
-    )
+    second = await run_scrape(feed_id, scraper=scraper, llm=llm, session_factory=pipeline_factory)
     assert second.error_message is None
     assert second.status == "xpath_regenerated"
     assert len(llm.calls) == 1
@@ -263,11 +247,7 @@ async def test_regenerate_when_xpath_breaks(
         feed = await s.get(Feed, feed_id)
         assert feed is not None
         extractor_count = (
-            (
-                await s.execute(
-                    select(XPathExtractor).where(XPathExtractor.feed_id == feed_id)
-                )
-            )
+            (await s.execute(select(XPathExtractor).where(XPathExtractor.feed_id == feed_id)))
             .scalars()
             .all()
         )
@@ -284,17 +264,13 @@ async def test_paused_feed_is_skipped(
     scraper = FakePassePartout()
     llm = FakeLLMClient([])
 
-    outcome = await run_scrape(
-        feed_id, scraper=scraper, llm=llm, session_factory=pipeline_factory
-    )
+    outcome = await run_scrape(feed_id, scraper=scraper, llm=llm, session_factory=pipeline_factory)
     assert outcome.skipped is True
     assert outcome.status == "skipped"
 
     async with pipeline_factory() as s:
         runs = (
-            (await s.execute(select(ScrapeRun).where(ScrapeRun.feed_id == feed_id)))
-            .scalars()
-            .all()
+            (await s.execute(select(ScrapeRun).where(ScrapeRun.feed_id == feed_id))).scalars().all()
         )
     assert runs == []
 
@@ -307,14 +283,10 @@ async def test_fetch_failure_marks_feed_failed(
 
     feed_id = await _make_feed(pipeline_factory)
     scraper = FakePassePartout()
-    scraper.register_error(
-        "https://example.com/", PassePartoutUnavailable("daemon offline")
-    )
+    scraper.register_error("https://example.com/", PassePartoutUnavailable("daemon offline"))
     llm = FakeLLMClient([])
 
-    outcome = await run_scrape(
-        feed_id, scraper=scraper, llm=llm, session_factory=pipeline_factory
-    )
+    outcome = await run_scrape(feed_id, scraper=scraper, llm=llm, session_factory=pipeline_factory)
     assert outcome.status == "failed"
     assert outcome.error_message and "daemon offline" in outcome.error_message
 
@@ -384,9 +356,7 @@ async def test_regeneration_fail_marks_feed_failed(
     # Page has 2 anchors → ids 1, 2; xpath matches both.
     llm = FakeLLMClient([_reply([1, 2], "//div[@class='feed']//a")])
 
-    outcome = await run_scrape(
-        feed_id, scraper=scraper, llm=llm, session_factory=pipeline_factory
-    )
+    outcome = await run_scrape(feed_id, scraper=scraper, llm=llm, session_factory=pipeline_factory)
     assert outcome.status == "failed"
     assert outcome.error_message and "regenerated xpath" in outcome.error_message
 
@@ -479,12 +449,8 @@ async def test_lock_does_not_span_llm_call(
     feed B's fetch has happened — if the lock spanned the LLM call, this
     would deadlock.
     """
-    feed_a = await _make_feed(
-        pipeline_factory, url="https://a.example.com/", title="A"
-    )
-    feed_b = await _make_feed(
-        pipeline_factory, url="https://b.example.com/", title="B"
-    )
+    feed_a = await _make_feed(pipeline_factory, url="https://a.example.com/", title="A")
+    feed_b = await _make_feed(pipeline_factory, url="https://b.example.com/", title="B")
 
     scraper = FakePassePartout()
     scraper.register("https://a.example.com/", html=HTML_INITIAL)
@@ -512,17 +478,13 @@ async def test_lock_does_not_span_llm_call(
     fast = FastLLM()
 
     async def run_a() -> None:
-        await run_scrape(
-            feed_a, scraper=scraper, llm=slow, session_factory=pipeline_factory
-        )
+        await run_scrape(feed_a, scraper=scraper, llm=slow, session_factory=pipeline_factory)
 
     async def run_b() -> None:
         # Give A a moment to enter its LLM call first.
         await asyncio.sleep(0.05)
         try:
-            await run_scrape(
-                feed_b, scraper=scraper, llm=fast, session_factory=pipeline_factory
-            )
+            await run_scrape(feed_b, scraper=scraper, llm=fast, session_factory=pipeline_factory)
         finally:
             b_fetch_done.set()
 
@@ -569,9 +531,7 @@ async def test_current_step_cleared_on_failure(
 
     feed_id = await _make_feed(pipeline_factory)
     scraper = FakePassePartout()
-    scraper.register_error(
-        "https://example.com/", PassePartoutUnavailable("upstream down")
-    )
+    scraper.register_error("https://example.com/", PassePartoutUnavailable("upstream down"))
 
     outcome = await run_scrape(
         feed_id,
@@ -611,9 +571,7 @@ async def test_current_step_set_during_in_flight_run(
         await derive_started.wait()
         async with pipeline_factory() as s:
             row = (
-                await s.execute(
-                    select(ScrapeRun).where(ScrapeRun.feed_id == feed_id)
-                )
+                await s.execute(select(ScrapeRun).where(ScrapeRun.feed_id == feed_id))
             ).scalar_one()
             seen_step.append(row.current_step)
         derive_release.set()
@@ -628,4 +586,3 @@ async def test_current_step_set_during_in_flight_run(
 
     await asyncio.wait_for(asyncio.gather(runner(), watcher()), timeout=10.0)
     assert seen_step == ["deriving_xpath"]
-

@@ -63,9 +63,7 @@ def _validate_startup_config(settings: Settings) -> None:
     if llm_missing:
         problems.append(f"LLM config incomplete: missing {', '.join(llm_missing)}")
     if problems:
-        raise RuntimeError(
-            "veilleur is misconfigured:\n  - " + "\n  - ".join(problems)
-        )
+        raise RuntimeError("veilleur is misconfigured:\n  - " + "\n  - ".join(problems))
 
 
 def _build_scheduler() -> tuple[SchedulerLoop, list[object]]:
@@ -89,11 +87,7 @@ def _build_scheduler() -> tuple[SchedulerLoop, list[object]]:
     llm = HttpxLLMClient(
         api_url=settings.LLM_API_URL or "",
         model=settings.LLM_MODEL_NAME or "",
-        api_key=(
-            settings.LLM_API_KEY.get_secret_value()
-            if settings.LLM_API_KEY
-            else ""
-        ),
+        api_key=(settings.LLM_API_KEY.get_secret_value() if settings.LLM_API_KEY else ""),
         http=llm_http,
     )
 

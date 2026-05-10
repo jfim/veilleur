@@ -144,9 +144,7 @@ async def test_tick_scrapes_due_feed(
         calls.append(fid)
         return _ok_outcome()
 
-    loop = SchedulerLoop(
-        scrape=fake_scrape, session_factory=scheduler_factory, tick_seconds=1.0
-    )
+    loop = SchedulerLoop(scrape=fake_scrape, session_factory=scheduler_factory, tick_seconds=1.0)
     result = await loop.tick()
     assert result == feed_id
     assert calls == [feed_id]
@@ -163,9 +161,7 @@ async def test_tick_no_due_feed_no_scrape(
         calls.append(fid)
         return _ok_outcome()
 
-    loop = SchedulerLoop(
-        scrape=fake_scrape, session_factory=scheduler_factory, tick_seconds=1.0
-    )
+    loop = SchedulerLoop(scrape=fake_scrape, session_factory=scheduler_factory, tick_seconds=1.0)
     assert await loop.tick() is None
     assert calls == []
 
@@ -180,9 +176,7 @@ async def test_tick_swallows_scrape_exception(
     async def boom(fid: uuid.UUID) -> ScrapeOutcome:
         raise RuntimeError("kaboom")
 
-    loop = SchedulerLoop(
-        scrape=boom, session_factory=scheduler_factory, tick_seconds=1.0
-    )
+    loop = SchedulerLoop(scrape=boom, session_factory=scheduler_factory, tick_seconds=1.0)
     # Should not raise — the loop logs and moves on.
     result = await loop.tick()
     assert result == feed_id
@@ -204,9 +198,7 @@ async def test_start_stop_runs_at_least_one_scrape(
         seen.set()
         return _ok_outcome()
 
-    loop = SchedulerLoop(
-        scrape=fake_scrape, session_factory=scheduler_factory, tick_seconds=0.05
-    )
+    loop = SchedulerLoop(scrape=fake_scrape, session_factory=scheduler_factory, tick_seconds=0.05)
     loop.start()
     try:
         await asyncio.wait_for(seen.wait(), timeout=2.0)
@@ -233,9 +225,7 @@ async def test_stop_waits_for_in_flight_scrape(
         finished.set()
         return _ok_outcome()
 
-    loop = SchedulerLoop(
-        scrape=slow_scrape, session_factory=scheduler_factory, tick_seconds=0.05
-    )
+    loop = SchedulerLoop(scrape=slow_scrape, session_factory=scheduler_factory, tick_seconds=0.05)
     loop.start()
     await asyncio.wait_for(started.wait(), timeout=2.0)
 
@@ -258,9 +248,7 @@ async def test_start_is_idempotent(
     async def fake_scrape(fid: uuid.UUID) -> ScrapeOutcome:
         return _ok_outcome()
 
-    loop = SchedulerLoop(
-        scrape=fake_scrape, session_factory=scheduler_factory, tick_seconds=0.5
-    )
+    loop = SchedulerLoop(scrape=fake_scrape, session_factory=scheduler_factory, tick_seconds=0.5)
     loop.start()
     assert loop.is_running
     # Calling start() again must not raise or spawn a second task.
@@ -277,9 +265,7 @@ async def test_stop_without_start_is_a_noop(
     async def fake_scrape(fid: uuid.UUID) -> ScrapeOutcome:
         return _ok_outcome()
 
-    loop = SchedulerLoop(
-        scrape=fake_scrape, session_factory=scheduler_factory, tick_seconds=0.5
-    )
+    loop = SchedulerLoop(scrape=fake_scrape, session_factory=scheduler_factory, tick_seconds=0.5)
     await loop.stop()  # should not raise
     assert not loop.is_running
 
@@ -291,6 +277,4 @@ def test_init_rejects_non_positive_tick(
         return _ok_outcome()
 
     with pytest.raises(ValueError):
-        SchedulerLoop(
-            scrape=fake_scrape, session_factory=scheduler_factory, tick_seconds=0.0
-        )
+        SchedulerLoop(scrape=fake_scrape, session_factory=scheduler_factory, tick_seconds=0.0)

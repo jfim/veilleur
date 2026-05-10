@@ -40,17 +40,11 @@ class PgInfo:
 
     @property
     def sync_url(self) -> str:
-        return (
-            f"postgresql+psycopg://{self.user}:{self.password}"
-            f"@{self.host}:{self.port}/{self.db}"
-        )
+        return f"postgresql+psycopg://{self.user}:{self.password}@{self.host}:{self.port}/{self.db}"
 
     @property
     def async_url(self) -> str:
-        return (
-            f"postgresql+asyncpg://{self.user}:{self.password}"
-            f"@{self.host}:{self.port}/{self.db}"
-        )
+        return f"postgresql+asyncpg://{self.user}:{self.password}@{self.host}:{self.port}/{self.db}"
 
 
 def _set_pg_env(info: PgInfo) -> dict[str, str | None]:
@@ -144,9 +138,7 @@ def alembic_upgraded(pg_info: PgInfo) -> Iterator[None]:
 
 
 @pytest_asyncio.fixture(loop_scope="session", scope="session")
-async def pg_engine(
-    alembic_upgraded: None, pg_info: PgInfo
-) -> AsyncIterator[AsyncEngine]:
+async def pg_engine(alembic_upgraded: None, pg_info: PgInfo) -> AsyncIterator[AsyncEngine]:
     """One async engine for the whole test session.
 
     Per-test fixtures check out connections from this engine's pool instead of

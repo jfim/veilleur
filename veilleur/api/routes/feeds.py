@@ -47,9 +47,7 @@ router = APIRouter(
 
 def _feed_to_read(feed: Feed) -> FeedRead:
     active_xpath = (
-        feed.active_xpath_extractor.xpath
-        if feed.active_xpath_extractor is not None
-        else None
+        feed.active_xpath_extractor.xpath if feed.active_xpath_extractor is not None else None
     )
     return FeedRead(
         id=feed.id,
@@ -66,11 +64,7 @@ def _feed_to_read(feed: Feed) -> FeedRead:
 
 
 async def _get_feed_or_404(session: AsyncSession, feed_id: uuid.UUID) -> Feed:
-    stmt = (
-        select(Feed)
-        .where(Feed.id == feed_id)
-        .options(selectinload(Feed.active_xpath_extractor))
-    )
+    stmt = select(Feed).where(Feed.id == feed_id).options(selectinload(Feed.active_xpath_extractor))
     feed = (await session.execute(stmt)).scalar_one_or_none()
     if feed is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="feed not found")
@@ -249,9 +243,7 @@ async def list_feed_items(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"invalid cursor: {exc}",
             ) from exc
-        stmt = stmt.where(
-            tuple_(FeedItem.first_seen_at, FeedItem.id) < (cur_ts, cur_id)
-        )
+        stmt = stmt.where(tuple_(FeedItem.first_seen_at, FeedItem.id) < (cur_ts, cur_id))
 
     rows = list((await session.execute(stmt)).scalars().all())
     next_cursor: str | None = None

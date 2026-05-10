@@ -31,14 +31,10 @@ class Feed(Base):
         Index("ix_feeds_status_last_scraped_at", "status", "last_scraped_at"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), primary_key=True, default=new_id
-    )
+    id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=new_id)
     url: Mapped[str] = mapped_column(unique=True, nullable=False)
     title: Mapped[str] = mapped_column(nullable=False)
-    poll_interval_seconds: Mapped[int] = mapped_column(
-        nullable=False, server_default=text("3600")
-    )
+    poll_interval_seconds: Mapped[int] = mapped_column(nullable=False, server_default=text("3600"))
     active_xpath_extractor_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey(
@@ -51,12 +47,8 @@ class Feed(Base):
         ),
         nullable=True,
     )
-    status: Mapped[str] = mapped_column(
-        nullable=False, server_default=text("'active'")
-    )
-    last_scraped_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    status: Mapped[str] = mapped_column(nullable=False, server_default=text("'active'"))
+    last_scraped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_failure_reason: Mapped[str | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()")

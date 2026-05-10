@@ -73,9 +73,7 @@ def _map_status(response: httpx.Response) -> None:
         raise PassePartoutBusy("passe-partout returned 429 (MAX_TABS)")
     if 500 <= sc < 600:
         raise PassePartoutUnavailable(f"passe-partout HTTP {sc}")
-    raise PassePartoutProtocolError(
-        f"unexpected passe-partout HTTP {sc}: {response.text[:200]!r}"
-    )
+    raise PassePartoutProtocolError(f"unexpected passe-partout HTTP {sc}: {response.text[:200]!r}")
 
 
 class PassePartoutClient:
@@ -170,17 +168,13 @@ class PassePartoutClient:
                     f"fetch exceeded {self._local_budget}s budget", partial=partial
                 ) from exc
 
-    async def _fetch_locked(
-        self, url: str, state: dict[str, object]
-    ) -> FetchResult:
+    async def _fetch_locked(self, url: str, state: dict[str, object]) -> FetchResult:
         tab_id: str | None = None
 
         try:
             state["step"] = "create_tab"
             create_resp = await self._http.post("/tabs", json={"url": url})
-            tab_id, status_code, final_url, content_type = self._parse_create(
-                create_resp, url
-            )
+            tab_id, status_code, final_url, content_type = self._parse_create(create_resp, url)
             state["tab_id"] = tab_id
             state["status_code"] = status_code
             state["final_url"] = final_url
@@ -203,8 +197,7 @@ class PassePartoutClient:
                 self._handle_tab_response(wait_resp)
             else:
                 logger.info(
-                    "passe-partout /wait returned 408 for tab %s; "
-                    "proceeding with current HTML",
+                    "passe-partout /wait returned 408 for tab %s; proceeding with current HTML",
                     tab_id,
                 )
 
@@ -234,9 +227,7 @@ class PassePartoutClient:
             ) from exc
         except httpx.HTTPError as exc:
             step = state.get("step", "?")
-            raise PassePartoutUnavailable(
-                f"passe-partout http error during {step}: {exc}"
-            ) from exc
+            raise PassePartoutUnavailable(f"passe-partout http error during {step}: {exc}") from exc
         finally:
             if tab_id is not None:
                 # Shielded so a timeout cancellation doesn't kill the cleanup.
@@ -299,9 +290,7 @@ class PassePartoutClient:
             return None
         try:
             resp = await asyncio.shield(
-                asyncio.wait_for(
-                    self._http.get(f"/tabs/{tab_id}/html"), timeout=2.0
-                )
+                asyncio.wait_for(self._http.get(f"/tabs/{tab_id}/html"), timeout=2.0)
             )
         except (TimeoutError, httpx.HTTPError) as exc:
             logger.warning("best-effort partial-html fetch failed: %s", exc)

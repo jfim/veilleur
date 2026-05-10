@@ -19,7 +19,7 @@ from fastapi import Header, HTTPException, status
 
 from veilleur.config import get_settings
 
-_REALM = 'Veilleur'
+_REALM = "Veilleur"
 _CHALLENGE = f'Basic realm="{_REALM}"'
 
 

@@ -96,11 +96,7 @@ web_router = APIRouter(
 
 
 async def _get_feed_or_404(session: AsyncSession, feed_id: uuid.UUID) -> Feed:
-    stmt = (
-        select(Feed)
-        .where(Feed.id == feed_id)
-        .options(selectinload(Feed.active_xpath_extractor))
-    )
+    stmt = select(Feed).where(Feed.id == feed_id).options(selectinload(Feed.active_xpath_extractor))
     feed = (await session.execute(stmt)).scalar_one_or_none()
     if feed is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="feed not found")
@@ -181,9 +177,7 @@ async def index(
     running_ids = set(
         (
             await session.execute(
-                select(ScrapeRun.feed_id)
-                .where(ScrapeRun.status == "running")
-                .distinct()
+                select(ScrapeRun.feed_id).where(ScrapeRun.status == "running").distinct()
             )
         )
         .scalars()
@@ -229,9 +223,7 @@ async def feed_detail(
     runs = list((await session.execute(runs_stmt)).scalars().all())
     inflight_run = next((r for r in runs if r.status == "running"), None)
     active_xpath = (
-        feed.active_xpath_extractor.xpath
-        if feed.active_xpath_extractor is not None
-        else None
+        feed.active_xpath_extractor.xpath if feed.active_xpath_extractor is not None else None
     )
     return _render(
         request,
@@ -315,9 +307,7 @@ async def pause_feed_form(
     feed.updated_at = datetime.now(tz=feed.created_at.tzinfo)
     await session.commit()
     return _redirect(
-        _with_flash(
-            str(request.url_for("index")), message="Feed paused.", kind="success"
-        )
+        _with_flash(str(request.url_for("index")), message="Feed paused.", kind="success")
     )
 
 
@@ -333,9 +323,7 @@ async def unpause_feed_form(
     feed.updated_at = datetime.now(tz=feed.created_at.tzinfo)
     await session.commit()
     return _redirect(
-        _with_flash(
-            str(request.url_for("index")), message="Feed unpaused.", kind="success"
-        )
+        _with_flash(str(request.url_for("index")), message="Feed unpaused.", kind="success")
     )
 
 
@@ -357,9 +345,7 @@ async def delete_feed_form(
     await session.delete(feed)
     await session.commit()
     return _redirect(
-        _with_flash(
-            str(request.url_for("index")), message="Feed deleted.", kind="success"
-        )
+        _with_flash(str(request.url_for("index")), message="Feed deleted.", kind="success")
     )
 
 
@@ -485,9 +471,7 @@ async def scrape_feed_form(
     )
 
 
-@web_router.post(
-    "/ui/feeds/{feed_id}/regenerate-xpath", name="regenerate_xpath_form"
-)
+@web_router.post("/ui/feeds/{feed_id}/regenerate-xpath", name="regenerate_xpath_form")
 async def regenerate_xpath_form(
     feed_id: uuid.UUID,
     request: Request,

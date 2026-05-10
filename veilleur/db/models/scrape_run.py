@@ -35,9 +35,7 @@ class ScrapeRun(Base):
         Index("ix_scrape_runs_started_at", "started_at"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), primary_key=True, default=new_id
-    )
+    id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=new_id)
     feed_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("feeds.id", ondelete="CASCADE"),
@@ -51,18 +49,14 @@ class ScrapeRun(Base):
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
-    finished_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(nullable=False)
     http_status: Mapped[int | None] = mapped_column(nullable=True)
     raw_html_path: Mapped[str | None] = mapped_column(nullable=True)
     items_seen: Mapped[int] = mapped_column(nullable=False, server_default=text("0"))
     items_new: Mapped[int] = mapped_column(nullable=False, server_default=text("0"))
     error_message: Mapped[str | None] = mapped_column(nullable=True)
-    xpath_attempts: Mapped[list[dict[str, object]] | None] = mapped_column(
-        JSONB, nullable=True
-    )
+    xpath_attempts: Mapped[list[dict[str, object]] | None] = mapped_column(JSONB, nullable=True)
     # Free-form pipeline step name set while a run is in flight; cleared back
     # to NULL once the run reaches a terminal status. Used by the UI to show
     # operators what the scraper is currently doing. Convention values:
