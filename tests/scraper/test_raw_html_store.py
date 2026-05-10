@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gzip
+import os
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -51,6 +52,10 @@ def test_validate_creates_missing_dir(tmp_path: Path) -> None:
     assert target.is_dir()
 
 
+@pytest.mark.skipif(
+    hasattr(os, "geteuid") and os.geteuid() == 0,
+    reason="root bypasses DAC permission checks, so chmod 0o500 is still writable",
+)
 def test_validate_rejects_unwritable_dir(tmp_path: Path) -> None:
     target = tmp_path / "ro"
     target.mkdir()
