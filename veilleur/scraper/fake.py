@@ -86,9 +86,7 @@ class FakePassePartout:
         if isinstance(outcome, _Timeout):
             if outcome.after > 0:
                 await asyncio.sleep(outcome.after)
-            raise FetchTimeout(
-                f"fake timeout for {url}", partial=outcome.partial
-            )
+            raise FetchTimeout(f"fake timeout for {url}", partial=outcome.partial)
         if isinstance(outcome, _Error):
             raise outcome.error
         return FetchResult(

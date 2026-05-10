@@ -27,9 +27,7 @@ def test_write_then_read_roundtrip(tmp_path: Path) -> None:
         html=html,
     )
 
-    expected_rel = (
-        f"{feed_id}/2026/05/2026-05-09-12-34-56-{run_id.hex[:8]}.html.gz"
-    )
+    expected_rel = f"{feed_id}/2026/05/2026-05-09-12-34-56-{run_id.hex[:8]}.html.gz"
     assert rel == expected_rel
 
     target = tmp_path / rel

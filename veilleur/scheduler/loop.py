@@ -117,9 +117,7 @@ class SchedulerLoop:
         return feed_id
 
     async def _run(self) -> None:
-        logger.info(
-            "scheduler started (tick=%.1fs)", self._tick_seconds
-        )
+        logger.info("scheduler started (tick=%.1fs)", self._tick_seconds)
         try:
             while not self._stop_event.is_set():
                 feed_id = await self.tick()

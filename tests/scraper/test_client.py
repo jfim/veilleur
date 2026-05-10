@@ -55,13 +55,9 @@ async def test_client_success_full_flow() -> None:
         return_value=httpx.Response(200, json={"network_idle": True})
     )
     html = respx.get(f"{BASE}/tabs/tab-1/html").mock(
-        return_value=httpx.Response(
-            200, text="<html><body>hello</body></html>"
-        )
+        return_value=httpx.Response(200, text="<html><body>hello</body></html>")
     )
-    delete = respx.delete(f"{BASE}/tabs/tab-1").mock(
-        return_value=httpx.Response(204)
-    )
+    delete = respx.delete(f"{BASE}/tabs/tab-1").mock(return_value=httpx.Response(204))
 
     async with _make_client() as client:
         result = await client.fetch("https://example.com")
@@ -91,9 +87,7 @@ async def test_client_wait_408_proceeds_with_partial_html() -> None:
         )
     )
     respx.post(f"{BASE}/tabs/tab-408/wait").mock(
-        return_value=httpx.Response(
-            408, json={"error": "timeout", "detail": "wait timed out"}
-        )
+        return_value=httpx.Response(408, json={"error": "timeout", "detail": "wait timed out"})
     )
     html = respx.get(f"{BASE}/tabs/tab-408/html").mock(
         return_value=httpx.Response(200, text="<html>partial</html>")
@@ -122,9 +116,7 @@ async def test_client_target_page_404_does_not_raise() -> None:
             },
         )
     )
-    respx.post(f"{BASE}/tabs/tab-2/wait").mock(
-        return_value=httpx.Response(200, json={})
-    )
+    respx.post(f"{BASE}/tabs/tab-2/wait").mock(return_value=httpx.Response(200, json={}))
     respx.get(f"{BASE}/tabs/tab-2/html").mock(
         return_value=httpx.Response(200, text="<h1>not found</h1>")
     )
@@ -187,9 +179,7 @@ async def test_client_unsupported_content_type() -> None:
         )
     )
     # DELETE must still be called from the finally clause.
-    delete = respx.delete(f"{BASE}/tabs/tab-3").mock(
-        return_value=httpx.Response(204)
-    )
+    delete = respx.delete(f"{BASE}/tabs/tab-3").mock(return_value=httpx.Response(204))
 
     async with _make_client() as client:
         with pytest.raises(UnsupportedContentType) as exc:
@@ -212,12 +202,8 @@ async def test_client_xhtml_content_type_accepted() -> None:
             },
         )
     )
-    respx.post(f"{BASE}/tabs/tab-x/wait").mock(
-        return_value=httpx.Response(200, json={})
-    )
-    respx.get(f"{BASE}/tabs/tab-x/html").mock(
-        return_value=httpx.Response(200, text="<html/>")
-    )
+    respx.post(f"{BASE}/tabs/tab-x/wait").mock(return_value=httpx.Response(200, json={}))
+    respx.get(f"{BASE}/tabs/tab-x/html").mock(return_value=httpx.Response(200, text="<html/>"))
     respx.delete(f"{BASE}/tabs/tab-x").mock(return_value=httpx.Response(204))
 
     async with _make_client() as client:
@@ -279,12 +265,8 @@ async def test_client_sends_authorization_header_when_token_set() -> None:
         )
 
     respx.post(f"{BASE}/tabs").mock(side_effect=_check)
-    respx.post(f"{BASE}/tabs/tab-a/wait").mock(
-        return_value=httpx.Response(200, json={})
-    )
-    respx.get(f"{BASE}/tabs/tab-a/html").mock(
-        return_value=httpx.Response(200, text="ok")
-    )
+    respx.post(f"{BASE}/tabs/tab-a/wait").mock(return_value=httpx.Response(200, json={}))
+    respx.get(f"{BASE}/tabs/tab-a/html").mock(return_value=httpx.Response(200, text="ok"))
     respx.delete(f"{BASE}/tabs/tab-a").mock(return_value=httpx.Response(204))
 
     async with _make_client(bearer_token="s3cret") as client:
@@ -310,12 +292,8 @@ async def test_client_no_authorization_header_when_token_unset() -> None:
         )
 
     respx.post(f"{BASE}/tabs").mock(side_effect=_check)
-    respx.post(f"{BASE}/tabs/tab-n/wait").mock(
-        return_value=httpx.Response(200, json={})
-    )
-    respx.get(f"{BASE}/tabs/tab-n/html").mock(
-        return_value=httpx.Response(200, text="ok")
-    )
+    respx.post(f"{BASE}/tabs/tab-n/wait").mock(return_value=httpx.Response(200, json={}))
+    respx.get(f"{BASE}/tabs/tab-n/html").mock(return_value=httpx.Response(200, text="ok"))
     respx.delete(f"{BASE}/tabs/tab-n").mock(return_value=httpx.Response(204))
 
     async with _make_client(bearer_token=None) as client:
@@ -347,12 +325,8 @@ async def test_client_singleflight_serializes_concurrent_fetches() -> None:
         )
 
     respx.post(f"{BASE}/tabs").mock(side_effect=create)
-    respx.post(f"{BASE}/tabs/tab-sf/wait").mock(
-        return_value=httpx.Response(200, json={})
-    )
-    respx.get(f"{BASE}/tabs/tab-sf/html").mock(
-        return_value=httpx.Response(200, text="ok")
-    )
+    respx.post(f"{BASE}/tabs/tab-sf/wait").mock(return_value=httpx.Response(200, json={}))
+    respx.get(f"{BASE}/tabs/tab-sf/html").mock(return_value=httpx.Response(200, text="ok"))
     respx.delete(f"{BASE}/tabs/tab-sf").mock(return_value=httpx.Response(204))
 
     async with _make_client() as client:
@@ -379,12 +353,8 @@ async def test_client_delete_failure_is_swallowed() -> None:
             },
         )
     )
-    respx.post(f"{BASE}/tabs/tab-d/wait").mock(
-        return_value=httpx.Response(200, json={})
-    )
-    respx.get(f"{BASE}/tabs/tab-d/html").mock(
-        return_value=httpx.Response(200, text="ok")
-    )
+    respx.post(f"{BASE}/tabs/tab-d/wait").mock(return_value=httpx.Response(200, json={}))
+    respx.get(f"{BASE}/tabs/tab-d/html").mock(return_value=httpx.Response(200, text="ok"))
     respx.delete(f"{BASE}/tabs/tab-d").mock(return_value=httpx.Response(500))
 
     async with _make_client() as client:

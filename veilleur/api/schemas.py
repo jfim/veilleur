@@ -109,6 +109,7 @@ class ScrapeTriggerResponse(BaseModel):
 # order by (first_seen_at desc, id desc) and use the cursor as a strict
 # upper-bound filter.
 
+
 def encode_cursor(ts: datetime, row_id: uuid.UUID) -> str:
     raw = f"{ts.isoformat()}|{row_id}".encode()
     return base64.urlsafe_b64encode(raw).decode().rstrip("=")
@@ -129,5 +130,3 @@ def decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
     except ValueError as exc:
         raise ValueError(f"invalid cursor payload: {exc}") from exc
     return ts, row_id
-
-

@@ -47,9 +47,7 @@ async def get_llm_client() -> LLMClient:
     settings = _settings()
     api_url = settings.LLM_API_URL or ""
     model = settings.LLM_MODEL_NAME or ""
-    api_key = (
-        settings.LLM_API_KEY.get_secret_value() if settings.LLM_API_KEY else ""
-    )
+    api_key = settings.LLM_API_KEY.get_secret_value() if settings.LLM_API_KEY else ""
     missing = [
         name
         for name, value in (
@@ -60,8 +58,6 @@ async def get_llm_client() -> LLMClient:
         if not value
     ]
     if missing:
-        raise LLMClientError(
-            f"missing required environment variables: {', '.join(missing)}"
-        )
+        raise LLMClientError(f"missing required environment variables: {', '.join(missing)}")
     http = httpx.AsyncClient(timeout=settings.LLM_HTTP_TIMEOUT_SECONDS)
     return HttpxLLMClient(api_url=api_url, model=model, api_key=api_key, http=http)

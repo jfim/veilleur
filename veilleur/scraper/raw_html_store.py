@@ -30,37 +30,26 @@ def validate_raw_html_dir(path: Path) -> None:
     absolute, cannot be created, or is not writable.
     """
     if not path.is_absolute():
-        raise RuntimeError(
-            f"RAW_HTML_DIR must be an absolute path, got: {path!s}"
-        )
+        raise RuntimeError(f"RAW_HTML_DIR must be an absolute path, got: {path!s}")
     try:
         path.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        raise RuntimeError(
-            f"RAW_HTML_DIR {path!s} could not be created: {exc}"
-        ) from exc
+        raise RuntimeError(f"RAW_HTML_DIR {path!s} could not be created: {exc}") from exc
     # Probe writability with a temp file.
     probe = path / ".veilleur-write-probe"
     try:
         probe.write_bytes(b"")
         probe.unlink()
     except OSError as exc:
-        raise RuntimeError(
-            f"RAW_HTML_DIR {path!s} is not writable: {exc}"
-        ) from exc
+        raise RuntimeError(f"RAW_HTML_DIR {path!s} is not writable: {exc}") from exc
 
 
-def _relative_path(
-    *, feed_id: uuid.UUID, run_id: uuid.UUID, when: datetime
-) -> Path:
+def _relative_path(*, feed_id: uuid.UUID, run_id: uuid.UUID, when: datetime) -> Path:
     """Compute the storage path (relative to ``raw_html_dir``)."""
     run_short = run_id.hex[:8]
     ts = when.strftime("%Y-%m-%d-%H-%M-%S")
     return (
-        Path(str(feed_id))
-        / f"{when.year:04d}"
-        / f"{when.month:02d}"
-        / f"{ts}-{run_short}.html.gz"
+        Path(str(feed_id)) / f"{when.year:04d}" / f"{when.month:02d}" / f"{ts}-{run_short}.html.gz"
     )
 
 

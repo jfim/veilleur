@@ -353,9 +353,7 @@ async def derive_xpath(
                     ok=False,
                 )
             )
-            raise XPathDerivationFailed(
-                f"LLM returned 'unable' on attempt {turn}/{max_attempts}"
-            )
+            raise XPathDerivationFailed(f"LLM returned 'unable' on attempt {turn}/{max_attempts}")
 
         if parsed.parse_error is not None or parsed.xpath is None:
             attempts.append(
@@ -405,10 +403,7 @@ async def derive_xpath(
             continue
 
         actual_ids, extras = run_result
-        ok = (
-            extras == 0
-            and tuple(sorted(parsed.intended_ids)) == tuple(sorted(actual_ids))
-        )
+        ok = extras == 0 and tuple(sorted(parsed.intended_ids)) == tuple(sorted(actual_ids))
         attempts.append(
             XPathAttempt(
                 turn=turn,
@@ -540,7 +535,9 @@ class HttpxLLMClient:
             raise LLMClientError(f"LLM returned HTTP {status}: {response.text[:500]}")
         else:  # pragma: no cover - loop always breaks or raises
             if last_exc is not None:
-                raise LLMClientError(f"transport error calling {endpoint}: {last_exc}") from last_exc
+                raise LLMClientError(
+                    f"transport error calling {endpoint}: {last_exc}"
+                ) from last_exc
             raise LLMClientError(f"LLM returned HTTP {last_status}: {last_body}")
 
         try:

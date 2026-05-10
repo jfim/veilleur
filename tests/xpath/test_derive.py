@@ -82,9 +82,7 @@ async def test_single_shot_returns_xpath() -> None:
 
 
 async def test_single_shot_strips_thinking_block() -> None:
-    client = FakeLLMClient(
-        "<think>reasoning</think>\narticles: 1,2\nxpath: //a[@class='post']"
-    )
+    client = FakeLLMClient("<think>reasoning</think>\narticles: 1,2\nxpath: //a[@class='post']")
     out = await derive_xpath("T", "u", SAMPLE_ANCHORS, client)
     assert out.xpath == "//a[@class='post']"
 
@@ -123,10 +121,7 @@ async def test_loop_succeeds_when_intended_matches_actual() -> None:
     post_ids = [
         i for i, a in enumerate(extraction.anchors, start=1) if a.href.startswith("/posts/")
     ]
-    reply = (
-        f"articles: {','.join(str(i) for i in post_ids)}\n"
-        "xpath: //a[@class='post']"
-    )
+    reply = f"articles: {','.join(str(i) for i in post_ids)}\nxpath: //a[@class='post']"
     client = FakeLLMClient(reply)
     out = await derive_xpath(
         extraction.title,
@@ -149,14 +144,8 @@ async def test_loop_retries_on_mismatch_then_succeeds() -> None:
     # First attempt: claims 'articles: post_ids' but xpath matches all <a>
     # (extras outside listing? all are in the listing) — actually //a matches
     # the nav and footer too, so actual will include id=nav and id=footer.
-    bad_reply = (
-        f"articles: {','.join(str(i) for i in post_ids)}\n"
-        "xpath: //a"
-    )
-    good_reply = (
-        f"articles: {','.join(str(i) for i in post_ids)}\n"
-        "xpath: //a[@class='post']"
-    )
+    bad_reply = f"articles: {','.join(str(i) for i in post_ids)}\nxpath: //a"
+    good_reply = f"articles: {','.join(str(i) for i in post_ids)}\nxpath: //a[@class='post']"
     client = FakeLLMClient([bad_reply, good_reply])
     out = await derive_xpath(
         extraction.title,

@@ -77,9 +77,7 @@ async def test_wrong_basic_password_rejected(web_client: httpx.AsyncClient) -> N
 
 
 @pytest.mark.asyncio
-async def test_unset_token_rejects_web_ui(
-    api_app: FastAPI, web_client: httpx.AsyncClient
-) -> None:
+async def test_unset_token_rejects_web_ui(api_app: FastAPI, web_client: httpx.AsyncClient) -> None:
     from veilleur.config import get_settings
 
     old = os.environ.pop("API_BEARER_TOKEN", None)
@@ -270,15 +268,11 @@ async def test_delete_form_requires_method_field(
         feed_id = feed.id
 
     # Wrong _method value rejected.
-    r = await web_client.post(
-        f"/ui/feeds/{feed_id}/delete", data={"_method": "PATCH"}
-    )
+    r = await web_client.post(f"/ui/feeds/{feed_id}/delete", data={"_method": "PATCH"})
     assert r.status_code == 400
 
     # Either no _method or _method=DELETE are both accepted.
-    r = await web_client.post(
-        f"/ui/feeds/{feed_id}/delete", data={"_method": "DELETE"}
-    )
+    r = await web_client.post(f"/ui/feeds/{feed_id}/delete", data={"_method": "DELETE"})
     assert r.status_code == 303
     async with api_factory() as s:
         assert await s.get(Feed, feed_id) is None
@@ -288,9 +282,7 @@ async def test_delete_form_requires_method_field(
 async def test_delete_unknown_feed_returns_404(
     web_client: httpx.AsyncClient,
 ) -> None:
-    r = await web_client.post(
-        f"/ui/feeds/{uuid.uuid4()}/delete", data={"_method": "DELETE"}
-    )
+    r = await web_client.post(f"/ui/feeds/{uuid.uuid4()}/delete", data={"_method": "DELETE"})
     assert r.status_code == 404
 
 
@@ -365,8 +357,8 @@ async def test_scrape_form_triggers_run(
         from sqlalchemy import select
 
         items = (
-            await s.execute(select(FeedItem).where(FeedItem.feed_id == feed_id))
-        ).scalars().all()
+            (await s.execute(select(FeedItem).where(FeedItem.feed_id == feed_id))).scalars().all()
+        )
         assert len(items) == 2
 
 
@@ -420,9 +412,7 @@ async def test_regenerate_xpath_form_replaces_active_extractor(
     async with api_factory() as s:
         from sqlalchemy import select
 
-        refreshed = (
-            await s.execute(select(Feed).where(Feed.id == feed_id))
-        ).scalar_one()
+        refreshed = (await s.execute(select(Feed).where(Feed.id == feed_id))).scalar_one()
         assert refreshed.active_xpath_extractor_id is not None
         assert refreshed.active_xpath_extractor_id != old_id
 
@@ -436,13 +426,13 @@ async def test_regenerate_xpath_form_replaces_active_extractor(
         assert new_extractor.xpath == XPATH
 
         items = (
-            await s.execute(select(FeedItem).where(FeedItem.feed_id == feed_id))
-        ).scalars().all()
+            (await s.execute(select(FeedItem).where(FeedItem.feed_id == feed_id))).scalars().all()
+        )
         assert len(items) == 2
 
         runs = (
-            await s.execute(select(ScrapeRun).where(ScrapeRun.feed_id == feed_id))
-        ).scalars().all()
+            (await s.execute(select(ScrapeRun).where(ScrapeRun.feed_id == feed_id))).scalars().all()
+        )
         assert len(runs) == 1
         assert runs[0].status == "xpath_regenerated"
 
@@ -499,9 +489,7 @@ async def test_prompt_settings_disabled_when_unset(
         assert r.status_code == 200
         assert "is not configured" in r.text
 
-        save = await web_client.post(
-            "/ui/settings/prompt", data={"prompt": "anything"}
-        )
+        save = await web_client.post("/ui/settings/prompt", data={"prompt": "anything"})
         assert save.status_code == 409
     finally:
         if old is not None:
@@ -527,9 +515,7 @@ async def test_prompt_settings_save_and_reset(
         assert "using bundled default" in r.text
 
         custom = "CUSTOM-PROMPT {title} {url}\n{listing}\n"
-        save = await web_client.post(
-            "/ui/settings/prompt", data={"prompt": custom}
-        )
+        save = await web_client.post("/ui/settings/prompt", data={"prompt": custom})
         assert save.status_code == 200
         assert target.read_text(encoding="utf-8") == custom
         assert "Prompt saved" in save.text
@@ -631,8 +617,8 @@ async def test_scrape_form_dedupes_when_already_running(
 
     async with api_factory() as s:
         runs = (
-            await s.execute(select(ScrapeRun).where(ScrapeRun.feed_id == feed_id))
-        ).scalars().all()
+            (await s.execute(select(ScrapeRun).where(ScrapeRun.feed_id == feed_id))).scalars().all()
+        )
         assert len(runs) == 1  # No new run was queued.
 
 

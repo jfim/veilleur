@@ -43,9 +43,7 @@ async def test_feed_item_unique_per_feed_guid(db_session: AsyncSession) -> None:
     db_session.add(feed)
     await db_session.flush()
 
-    db_session.add(
-        FeedItem(feed_id=feed.id, guid="g1", url="https://example.com/a/1", title="One")
-    )
+    db_session.add(FeedItem(feed_id=feed.id, guid="g1", url="https://example.com/a/1", title="One"))
     await db_session.flush()
 
     db_session.add(
@@ -67,9 +65,7 @@ async def test_cascade_delete_removes_children(db_session: AsyncSession) -> None
 
     run = ScrapeRun(feed_id=feed.id, status="success")
     db_session.add(run)
-    db_session.add(
-        FeedItem(feed_id=feed.id, guid="g1", url="https://example.com/c/1", title="One")
-    )
+    db_session.add(FeedItem(feed_id=feed.id, guid="g1", url="https://example.com/c/1", title="One"))
     await db_session.flush()
 
     await db_session.delete(feed)
@@ -82,9 +78,7 @@ async def test_cascade_delete_removes_children(db_session: AsyncSession) -> None
         await db_session.execute(select(ScrapeRun).where(ScrapeRun.feed_id == feed.id))
     ).all()
     remaining_ext = (
-        await db_session.execute(
-            select(XPathExtractor).where(XPathExtractor.feed_id == feed.id)
-        )
+        await db_session.execute(select(XPathExtractor).where(XPathExtractor.feed_id == feed.id))
     ).all()
     assert remaining_items == []
     assert remaining_runs == []

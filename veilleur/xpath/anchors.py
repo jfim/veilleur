@@ -38,9 +38,7 @@ def _max_anchors() -> int:
     try:
         value = int(raw)
     except ValueError as exc:
-        raise AnchorExtractionError(
-            f"XPATH_MAX_ANCHORS must be an integer, got {raw!r}"
-        ) from exc
+        raise AnchorExtractionError(f"XPATH_MAX_ANCHORS must be an integer, got {raw!r}") from exc
     if value <= 0:
         raise AnchorExtractionError(f"XPATH_MAX_ANCHORS must be positive, got {value}")
     return value

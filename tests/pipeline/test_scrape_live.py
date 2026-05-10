@@ -98,9 +98,7 @@ async def test_scrape_jfim_blog_matches_published_feed() -> None:
             http=llm_http,
         )
         try:
-            outcome = await run_scrape(
-                feed_id, scraper=scraper, llm=llm, session_factory=factory
-            )
+            outcome = await run_scrape(feed_id, scraper=scraper, llm=llm, session_factory=factory)
         finally:
             await scraper.aclose()
 
@@ -112,11 +110,7 @@ async def test_scrape_jfim_blog_matches_published_feed() -> None:
     # 4. Compare extracted items against the published feed.
     async with factory() as session:
         items = (
-            (
-                await session.execute(
-                    select(FeedItem.url).where(FeedItem.feed_id == feed_id)
-                )
-            )
+            (await session.execute(select(FeedItem.url).where(FeedItem.feed_id == feed_id)))
             .scalars()
             .all()
         )
@@ -140,9 +134,7 @@ async def test_scrape_jfim_blog_matches_published_feed() -> None:
     # that the xpath actually targets blog posts and not navigation.
     assert overlap, "no overlap between extracted URLs and published feed"
     coverage = len(overlap) / len(published)
-    assert coverage >= 0.5, (
-        f"only {coverage:.0%} of published entries appeared on the blog index"
-    )
+    assert coverage >= 0.5, f"only {coverage:.0%} of published entries appeared on the blog index"
 
 
 # Captured from a previous run with openai/gpt-oss-120b. The user's blog
@@ -197,9 +189,7 @@ async def test_scrape_jfim_blog_with_fixed_xpath() -> None:
         # Use a distinct URL so it doesn't collide with the full-LLM test
         # if both ran in the same DB.
         feed = (
-            await session.execute(
-                select(Feed).where(Feed.url == BLOG_URL)
-            )
+            await session.execute(select(Feed).where(Feed.url == BLOG_URL))
         ).scalar_one_or_none()
         if feed is None:
             feed = Feed(url=BLOG_URL, title="blog.jean-francois.im (fixed-xpath)")
@@ -213,9 +203,7 @@ async def test_scrape_jfim_blog_with_fixed_xpath() -> None:
     scraper = client_from_env()
     llm = _FixedLLMClient(GPT_OSS_XPATH)
     try:
-        outcome = await run_scrape(
-            feed_id, scraper=scraper, llm=llm, session_factory=factory
-        )
+        outcome = await run_scrape(feed_id, scraper=scraper, llm=llm, session_factory=factory)
     finally:
         await scraper.aclose()
 
@@ -227,11 +215,7 @@ async def test_scrape_jfim_blog_with_fixed_xpath() -> None:
 
     async with factory() as session:
         items = (
-            (
-                await session.execute(
-                    select(FeedItem.url).where(FeedItem.feed_id == feed_id)
-                )
-            )
+            (await session.execute(select(FeedItem.url).where(FeedItem.feed_id == feed_id)))
             .scalars()
             .all()
         )
