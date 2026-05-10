@@ -34,9 +34,11 @@ RUN groupadd --system --gid 1000 veilleur \
 WORKDIR /app
 
 COPY --from=builder --chown=veilleur:veilleur /app /app
+COPY --chown=veilleur:veilleur docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 USER veilleur
 
 EXPOSE 8000
 
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["uvicorn", "veilleur.app:app", "--host", "0.0.0.0", "--port", "8000"]
