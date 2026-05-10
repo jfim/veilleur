@@ -15,8 +15,17 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    Form,
+    HTTPException,
+    Request,
+    status,
+)
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
@@ -103,6 +112,30 @@ def _redirect(target: str) -> RedirectResponse:
     return RedirectResponse(url=target, status_code=status.HTTP_303_SEE_OTHER)
 
 
+# Allow-list of flash kinds we will surface from query params. Limits the
+# values rendered as a CSS class so a crafted URL can't inject markup.
+_FLASH_KINDS = {"success", "error", "info"}
+
+
+def _with_flash(target: str, *, message: str, kind: str = "success") -> str:
+    """Append a ``flash`` + ``flash_kind`` query string to ``target``."""
+    if kind not in _FLASH_KINDS:
+        kind = "info"
+    sep = "&" if "?" in target else "?"
+    return f"{target}{sep}flash={quote(message)}&flash_kind={quote(kind)}"
+
+
+def _flash_from_query(request: Request) -> dict[str, str] | None:
+    """Build the ``flash`` template var from query params, or ``None``."""
+    message = request.query_params.get("flash")
+    if not message:
+        return None
+    kind = request.query_params.get("flash_kind", "info")
+    if kind not in _FLASH_KINDS:
+        kind = "info"
+    return {"message": message, "kind": kind}
+
+
 def _render(
     request: Request,
     template: str,
@@ -111,7 +144,8 @@ def _render(
     status_code: int = 200,
 ) -> HTMLResponse:
     payload: dict[str, Any] = {"request": request, **context}
-    payload.setdefault("flash", None)
+    payload.setdefault("flash", _flash_from_query(request))
+    payload.setdefault("auto_refresh", False)
     return templates.TemplateResponse(
         request=request,
         name=template,
@@ -144,8 +178,31 @@ async def index(
         )
         counts = {fid: cnt for fid, cnt in (await session.execute(counts_stmt)).all()}
 
-    rows = [{"feed": feed, "item_count": counts.get(feed.id, 0)} for feed in feeds]
-    return _render(request, "index.html", {"feeds": rows})
+    running_ids = set(
+        (
+            await session.execute(
+                select(ScrapeRun.feed_id)
+                .where(ScrapeRun.status == "running")
+                .distinct()
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    rows = [
+        {
+            "feed": feed,
+            "item_count": counts.get(feed.id, 0),
+            "reprocessing": feed.id in running_ids,
+        }
+        for feed in feeds
+    ]
+    return _render(
+        request,
+        "index.html",
+        {"feeds": rows, "auto_refresh": bool(running_ids)},
+    )
 
 
 @web_router.get("/ui/feeds/{feed_id}", name="feed_detail")
@@ -170,6 +227,7 @@ async def feed_detail(
         .limit(20)
     )
     runs = list((await session.execute(runs_stmt)).scalars().all())
+    inflight_run = next((r for r in runs if r.status == "running"), None)
     active_xpath = (
         feed.active_xpath_extractor.xpath
         if feed.active_xpath_extractor is not None
@@ -183,6 +241,8 @@ async def feed_detail(
             "items": items,
             "runs": runs,
             "active_xpath": active_xpath,
+            "inflight_run": inflight_run,
+            "auto_refresh": inflight_run is not None,
         },
     )
 
@@ -216,7 +276,8 @@ async def create_feed_form(
             status_code=status.HTTP_409_CONFLICT,
             detail="a feed with this URL already exists",
         ) from exc
-    return _redirect(str(request.url_for("feed_detail", feed_id=feed.id)))
+    target = str(request.url_for("feed_detail", feed_id=feed.id))
+    return _redirect(_with_flash(target, message="Feed added.", kind="success"))
 
 
 @web_router.post("/ui/feeds/{feed_id}/edit", name="update_feed_form")
@@ -239,7 +300,8 @@ async def update_feed_form(
         feed.poll_interval_seconds = poll_interval_seconds
     feed.updated_at = datetime.now(tz=feed.created_at.tzinfo)
     await session.commit()
-    return _redirect(str(request.url_for("feed_detail", feed_id=feed.id)))
+    target = str(request.url_for("feed_detail", feed_id=feed.id))
+    return _redirect(_with_flash(target, message="Feed updated.", kind="success"))
 
 
 @web_router.post("/ui/feeds/{feed_id}/pause", name="pause_feed_form")
@@ -252,7 +314,11 @@ async def pause_feed_form(
     feed.status = "paused"
     feed.updated_at = datetime.now(tz=feed.created_at.tzinfo)
     await session.commit()
-    return _redirect(str(request.url_for("index")))
+    return _redirect(
+        _with_flash(
+            str(request.url_for("index")), message="Feed paused.", kind="success"
+        )
+    )
 
 
 @web_router.post("/ui/feeds/{feed_id}/unpause", name="unpause_feed_form")
@@ -266,7 +332,11 @@ async def unpause_feed_form(
     feed.last_failure_reason = None
     feed.updated_at = datetime.now(tz=feed.created_at.tzinfo)
     await session.commit()
-    return _redirect(str(request.url_for("index")))
+    return _redirect(
+        _with_flash(
+            str(request.url_for("index")), message="Feed unpaused.", kind="success"
+        )
+    )
 
 
 @web_router.post("/ui/feeds/{feed_id}/delete", name="delete_feed_form")
@@ -286,7 +356,11 @@ async def delete_feed_form(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="feed not found")
     await session.delete(feed)
     await session.commit()
-    return _redirect(str(request.url_for("index")))
+    return _redirect(
+        _with_flash(
+            str(request.url_for("index")), message="Feed deleted.", kind="success"
+        )
+    )
 
 
 @web_router.get("/ui/settings/prompt", name="prompt_settings")
@@ -338,22 +412,77 @@ async def prompt_settings_reset(request: Request) -> Response:
             detail="PROMPT_FILE is not configured; prompt edits are disabled",
         )
     xpath_prompt.reset_to_default()
-    return _redirect(str(request.url_for("prompt_settings")))
+    return _redirect(
+        _with_flash(
+            str(request.url_for("prompt_settings")),
+            message="Prompt reset to default.",
+            kind="success",
+        )
+    )
+
+
+async def _queue_scrape(
+    *,
+    feed_id: uuid.UUID,
+    request: Request,
+    session: AsyncSession,
+    scraper: Scraper,
+    llm: LLMClient,
+    background_tasks: BackgroundTasks,
+    force_regenerate: bool,
+    queued_message: str,
+    busy_message: str,
+) -> Response:
+    """Shared body for the two scrape-action endpoints.
+
+    Verifies the feed exists, refuses to schedule a second run if one is
+    already in flight, and otherwise hands the actual scrape off to a
+    background task so the redirect can return immediately.
+    """
+    exists = await session.execute(select(func.count()).where(Feed.id == feed_id))
+    if exists.scalar_one() == 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="feed not found")
+
+    target = str(request.url_for("feed_detail", feed_id=feed_id))
+
+    inflight = await session.execute(
+        select(ScrapeRun.id)
+        .where(ScrapeRun.feed_id == feed_id, ScrapeRun.status == "running")
+        .limit(1)
+    )
+    if inflight.scalar_one_or_none() is not None:
+        return _redirect(_with_flash(target, message=busy_message, kind="info"))
+
+    background_tasks.add_task(
+        run_scrape,
+        feed_id,
+        scraper=scraper,
+        llm=llm,
+        force_regenerate=force_regenerate,
+    )
+    return _redirect(_with_flash(target, message=queued_message, kind="success"))
 
 
 @web_router.post("/ui/feeds/{feed_id}/scrape", name="scrape_feed_form")
 async def scrape_feed_form(
     feed_id: uuid.UUID,
     request: Request,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_session),
     scraper: Scraper = Depends(get_scraper),
     llm: LLMClient = Depends(get_llm_client),
 ) -> Response:
-    exists = await session.execute(select(func.count()).where(Feed.id == feed_id))
-    if exists.scalar_one() == 0:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="feed not found")
-    await run_scrape(feed_id, scraper=scraper, llm=llm)
-    return _redirect(str(request.url_for("feed_detail", feed_id=feed_id)))
+    return await _queue_scrape(
+        feed_id=feed_id,
+        request=request,
+        session=session,
+        scraper=scraper,
+        llm=llm,
+        background_tasks=background_tasks,
+        force_regenerate=False,
+        queued_message="Scrape queued.",
+        busy_message="A scrape is already running for this feed.",
+    )
 
 
 @web_router.post(
@@ -362,6 +491,7 @@ async def scrape_feed_form(
 async def regenerate_xpath_form(
     feed_id: uuid.UUID,
     request: Request,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_session),
     scraper: Scraper = Depends(get_scraper),
     llm: LLMClient = Depends(get_llm_client),
@@ -374,8 +504,14 @@ async def regenerate_xpath_form(
     ``xpath_extractors`` row is created and ``feeds.active_xpath_extractor_id``
     is switched on success.
     """
-    exists = await session.execute(select(func.count()).where(Feed.id == feed_id))
-    if exists.scalar_one() == 0:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="feed not found")
-    await run_scrape(feed_id, scraper=scraper, llm=llm, force_regenerate=True)
-    return _redirect(str(request.url_for("feed_detail", feed_id=feed_id)))
+    return await _queue_scrape(
+        feed_id=feed_id,
+        request=request,
+        session=session,
+        scraper=scraper,
+        llm=llm,
+        background_tasks=background_tasks,
+        force_regenerate=True,
+        queued_message="XPath regeneration queued.",
+        busy_message="A scrape is already running for this feed.",
+    )

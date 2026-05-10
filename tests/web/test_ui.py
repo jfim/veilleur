@@ -359,7 +359,7 @@ async def test_scrape_form_triggers_run(
 
     r = await web_client.post(f"/ui/feeds/{feed_id}/scrape")
     assert r.status_code == 303
-    assert r.headers["location"].endswith(f"/ui/feeds/{feed_id}")
+    assert f"/ui/feeds/{feed_id}" in r.headers["location"]
 
     async with api_factory() as s:
         from sqlalchemy import select
@@ -415,7 +415,7 @@ async def test_regenerate_xpath_form_replaces_active_extractor(
 
     r = await web_client.post(f"/ui/feeds/{feed_id}/regenerate-xpath")
     assert r.status_code == 303
-    assert r.headers["location"].endswith(f"/ui/feeds/{feed_id}")
+    assert f"/ui/feeds/{feed_id}" in r.headers["location"]
 
     async with api_factory() as s:
         from sqlalchemy import select
@@ -566,6 +566,146 @@ async def test_static_css_served(web_client: httpx.AsyncClient) -> None:
     assert r.status_code == 200
     assert "text/css" in r.headers["content-type"]
     assert "Veilleur" in r.text
+
+
+# --- Issue #39 / #40 / #41: scrape-run UX ------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_scrape_form_redirects_with_queued_flash(
+    web_client: httpx.AsyncClient,
+    api_factory: async_sessionmaker[AsyncSession],
+    fake_scraper: FakePassePartout,
+    stub_llm: StubLLMClient,
+) -> None:
+    """`Scrape now` returns a 303 with a flash=Scrape+queued query string."""
+    async with api_factory() as s:
+        feed = Feed(url="https://example.com/", title="Example")
+        s.add(feed)
+        await s.commit()
+        feed_id = feed.id
+
+    fake_scraper.register("https://example.com/", html=HTML_BASIC)
+    stub_llm.queue(XPATH_REPLY)
+
+    r = await web_client.post(f"/ui/feeds/{feed_id}/scrape")
+    assert r.status_code == 303
+    location = r.headers["location"]
+    assert f"/ui/feeds/{feed_id}" in location
+    assert "flash=Scrape" in location
+    assert "flash_kind=success" in location
+
+    # Following the redirect renders the flash banner.
+    follow = await web_client.get(location)
+    assert follow.status_code == 200
+    assert "Scrape queued." in follow.text
+    assert 'class="flash success"' in follow.text
+
+
+@pytest.mark.asyncio
+async def test_scrape_form_dedupes_when_already_running(
+    web_client: httpx.AsyncClient,
+    api_factory: async_sessionmaker[AsyncSession],
+    fake_scraper: FakePassePartout,
+    stub_llm: StubLLMClient,
+) -> None:
+    """A second scrape click while one is in flight returns a busy flash and
+    does not enqueue a new run."""
+    async with api_factory() as s:
+        feed = Feed(url="https://example.com/", title="Example")
+        s.add(feed)
+        await s.flush()
+        # Pre-existing in-flight run blocks the new request.
+        running = ScrapeRun(feed_id=feed.id, status="running")
+        s.add(running)
+        await s.commit()
+        feed_id = feed.id
+
+    r = await web_client.post(f"/ui/feeds/{feed_id}/scrape")
+    assert r.status_code == 303
+    location = r.headers["location"]
+    assert "flash=A%20scrape%20is%20already%20running" in location
+    assert "flash_kind=info" in location
+
+    from sqlalchemy import select
+
+    async with api_factory() as s:
+        runs = (
+            await s.execute(select(ScrapeRun).where(ScrapeRun.feed_id == feed_id))
+        ).scalars().all()
+        assert len(runs) == 1  # No new run was queued.
+
+
+@pytest.mark.asyncio
+async def test_index_shows_failed_reprocessing_pill(
+    web_client: httpx.AsyncClient,
+    api_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A failed feed with an in-flight ScrapeRun renders ``failed (reprocessing)``
+    and the page sets a meta-refresh."""
+    async with api_factory() as s:
+        feed = Feed(
+            url="https://example.com/",
+            title="Example",
+            status="failed",
+            last_failure_reason="prior failure",
+        )
+        s.add(feed)
+        await s.flush()
+        s.add(ScrapeRun(feed_id=feed.id, status="running", current_step="fetching"))
+        await s.commit()
+
+    r = await web_client.get("/")
+    assert r.status_code == 200
+    assert "failed" in r.text
+    assert "(reprocessing)" in r.text
+    assert 'http-equiv="refresh"' in r.text
+
+
+@pytest.mark.asyncio
+async def test_feed_detail_shows_current_step_and_meta_refresh(
+    web_client: httpx.AsyncClient,
+    api_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """An in-flight scrape on the feed-detail page shows the current step
+    name and triggers a meta-refresh."""
+    async with api_factory() as s:
+        feed = Feed(url="https://example.com/", title="Example")
+        s.add(feed)
+        await s.flush()
+        s.add(
+            ScrapeRun(
+                feed_id=feed.id,
+                status="running",
+                current_step="deriving_xpath",
+            )
+        )
+        await s.commit()
+        feed_id = feed.id
+
+    r = await web_client.get(f"/ui/feeds/{feed_id}")
+    assert r.status_code == 200
+    assert "Scrape in progress" in r.text
+    assert "deriving_xpath" in r.text
+    assert 'http-equiv="refresh"' in r.text
+
+
+@pytest.mark.asyncio
+async def test_feed_detail_no_meta_refresh_when_idle(
+    web_client: httpx.AsyncClient,
+    api_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Without an in-flight scrape, the page does not auto-refresh."""
+    async with api_factory() as s:
+        feed = Feed(url="https://example.com/", title="Example")
+        s.add(feed)
+        await s.commit()
+        feed_id = feed.id
+
+    r = await web_client.get(f"/ui/feeds/{feed_id}")
+    assert r.status_code == 200
+    assert 'http-equiv="refresh"' not in r.text
+    assert "Scrape in progress" not in r.text
 
 
 # Re-export to keep the import non-orphan for linters.
