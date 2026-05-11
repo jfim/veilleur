@@ -30,6 +30,14 @@ from veilleur.xpath.types import (
 #: at call time. Per the Phase 3 resolutions.
 DEFAULT_MAX_ANCHORS: int = 250
 
+#: HTML parser configured to refuse network access, decline to follow
+#: external entity references, and bail out on absurdly deep trees so a
+#: hostile page can't trigger an XXE fetch or exhaust memory while parsing.
+_SAFE_HTML_PARSER = lxml.html.HTMLParser(
+    no_network=True,
+    huge_tree=False,
+)
+
 
 def _max_anchors() -> int:
     raw = os.environ.get("XPATH_MAX_ANCHORS")
@@ -143,7 +151,7 @@ def extract_anchors(html: str, base_url: str) -> AnchorExtractionResult:
         raise AnchorExtractionError("base_url must be a non-empty string")
 
     try:
-        root = lxml.html.fromstring(html)
+        root = lxml.html.fromstring(html, parser=_SAFE_HTML_PARSER)
     except (lxml.etree.ParserError, lxml.etree.XMLSyntaxError, ValueError) as exc:
         raise AnchorExtractionError(f"failed to parse HTML: {exc}") from exc
     except Exception as exc:  # pragma: no cover - defensive

@@ -25,6 +25,15 @@ from veilleur.xpath.types import (
 )
 
 
+#: HTML parser configured to refuse network access, decline to follow
+#: external entity references, and bail out on absurdly deep trees so a
+#: hostile page can't trigger an XXE fetch or exhaust memory while parsing.
+_SAFE_HTML_PARSER = lxml.html.HTMLParser(
+    no_network=True,
+    huge_tree=False,
+)
+
+
 def _last_path_segment(url: str) -> str:
     """Return the last non-empty path segment of *url*, else the URL itself."""
     parsed = urlparse(url)
@@ -58,7 +67,7 @@ def apply_xpath(html: str, base_url: str, xpath: str) -> list[Item]:
         raise AnchorExtractionError("base_url must be a non-empty string")
 
     try:
-        root = lxml.html.fromstring(html)
+        root = lxml.html.fromstring(html, parser=_SAFE_HTML_PARSER)
     except (lxml.etree.ParserError, lxml.etree.XMLSyntaxError, ValueError) as exc:
         raise AnchorExtractionError(f"failed to parse HTML: {exc}") from exc
 
