@@ -48,6 +48,15 @@ class Settings(BaseSettings):
     API_BEARER_TOKEN: SecretStr | None = None
     API_AUTH_DISABLED: bool = False
 
+    # Symmetric secret used to sign the web UI's session cookie via
+    # ``itsdangerous``. When unset, the value is derived from
+    # ``API_BEARER_TOKEN`` so single-deployment setups boot without an extra
+    # env var. Override explicitly when running multiple replicas (otherwise
+    # rotating the bearer token also invalidates every active session) or
+    # when you want to be able to revoke all sessions independently of the
+    # bearer credential.
+    SESSION_SECRET: SecretStr | None = None
+
     # Phase 3 — declared here for parity, used later
     XPATH_MAX_ANCHORS: int = 250
 
