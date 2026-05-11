@@ -375,7 +375,13 @@ async def prompt_settings_save(
             status_code=status.HTTP_409_CONFLICT,
             detail="PROMPT_FILE is not configured; prompt edits are disabled",
         )
-    overridden = xpath_prompt.save_template(prompt)
+    try:
+        overridden = xpath_prompt.save_template(prompt)
+    except xpath_prompt.PromptTooLargeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=str(exc),
+        ) from exc
     return _render(
         request,
         "prompt_settings.html",

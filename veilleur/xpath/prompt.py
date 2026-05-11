@@ -24,6 +24,17 @@ from pathlib import Path
 
 from veilleur.config import get_settings
 
+#: Hard cap on the size of a saved prompt template. The default template is
+#: ~2 KiB; 64 KiB leaves ample headroom for elaborate operator overrides
+#: while preventing the prompt-settings UI from being abused as a disk-fill
+#: vector via repeated multi-megabyte POSTs.
+MAX_PROMPT_BYTES: int = 64 * 1024
+
+
+class PromptTooLargeError(ValueError):
+    """Raised when a prompt template exceeds :data:`MAX_PROMPT_BYTES`."""
+
+
 DEFAULT_PROMPT_TEMPLATE = """Given the following links from a webpage, return an xpath expression that matches only links to articles. Ignore navigation, tag/category, pagination, and other non-article links — only links a reader would treat as an article, suitable for an RSS feed. The page is "{title}" from {url}.
 
 Each line below describes one <a> element with a numeric id, a CSS-like descriptive path, the anchor text, and the raw href. The path uses `tag#id` when the element has an id, `tag.class1.class2` for classes, `tag#id.class` for both, and `tag[N]` (1-indexed among same-tag siblings) only when neither id nor class is available. Prefer xpath predicates that target ids and class names over positional indices.
@@ -93,10 +104,15 @@ def save_template(text: str) -> bool:
 
     Raises:
         RuntimeError: If ``PROMPT_FILE`` is not configured.
+        PromptTooLargeError: If ``text`` exceeds :data:`MAX_PROMPT_BYTES`.
     """
     path = prompt_override_path()
     if path is None:
         raise RuntimeError("PROMPT_FILE is not configured; cannot persist prompt overrides")
+    if len(text.encode("utf-8")) > MAX_PROMPT_BYTES:
+        raise PromptTooLargeError(
+            f"prompt template exceeds the {MAX_PROMPT_BYTES}-byte cap"
+        )
     if is_default(text):
         reset_to_default()
         return False
