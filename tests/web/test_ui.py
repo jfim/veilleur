@@ -47,11 +47,17 @@ CSRF_TOKEN = "test-csrf-token"
 
 @pytest_asyncio.fixture
 async def web_client(api_app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
+    from veilleur.web.auth import issue_session_token, reset_serializer_cache
+
+    # The serializer is memoised against the configured bearer token /
+    # session secret; tests that swap those env vars need a fresh signer.
+    reset_serializer_cache()
+    session_token = issue_session_token()
     transport = httpx.ASGITransport(app=api_app)
     async with httpx.AsyncClient(
         transport=transport,
         base_url="http://test",
-        cookies={SESSION_COOKIE: TEST_BEARER_TOKEN, CSRF_COOKIE: CSRF_TOKEN},
+        cookies={SESSION_COOKIE: session_token, CSRF_COOKIE: CSRF_TOKEN},
         # Send the matching CSRF token on every request via the header
         # alternative so individual tests don't have to bake it into each
         # form payload.
@@ -109,7 +115,10 @@ async def test_login_submit_sets_cookie_and_redirects(web_client: httpx.AsyncCli
     assert r.status_code == 303
     assert r.headers["Location"] == "/"
     assert SESSION_COOKIE in r.cookies
-    assert r.cookies[SESSION_COOKIE] == TEST_BEARER_TOKEN
+    # The cookie must be a signed session marker, not the literal bearer
+    # token — anyone reading the cookie should not learn the API credential.
+    assert r.cookies[SESSION_COOKIE] != TEST_BEARER_TOKEN
+    assert TEST_BEARER_TOKEN not in r.cookies[SESSION_COOKIE]
 
 
 @pytest.mark.asyncio

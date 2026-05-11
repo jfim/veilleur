@@ -15,6 +15,7 @@ from veilleur.web.auth import (
     COOKIE_NAME,
     REMEMBER_ME_MAX_AGE_SECONDS,
     is_safe_next,
+    issue_session_token,
     verify_password,
 )
 from veilleur.web.csrf import require_csrf_token
@@ -177,7 +178,10 @@ async def login_submit(
     response = RedirectResponse(url=target, status_code=status.HTTP_303_SEE_OTHER)
     response.set_cookie(
         key=COOKIE_NAME,
-        value=password,
+        # Signed session marker — *not* the bearer token. Cookie capture
+        # therefore yields a session that can be revoked (by rotating the
+        # signing secret), not the long-lived API credential.
+        value=issue_session_token(),
         max_age=REMEMBER_ME_MAX_AGE_SECONDS if remember_me else None,
         httponly=True,
         secure=_cookie_secure(request),
