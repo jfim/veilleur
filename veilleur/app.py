@@ -12,6 +12,7 @@ import logging
 import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any
 
 import httpx
 from fastapi import Depends, FastAPI
@@ -20,6 +21,9 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
+from starlette.responses import Response as StarletteResponse
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from veilleur.api.routes import api_router
@@ -33,6 +37,43 @@ from veilleur.web import STATIC_DIR, STATIC_PATH, login_router, web_router
 from veilleur.xpath import HttpxLLMClient
 
 logger = logging.getLogger(__name__)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Attach a baseline set of defensive headers to every response.
+
+    The UI is server-rendered Jinja with no inline JS or third-party assets,
+    so a strict ``default-src 'self'`` CSP fits the existing surface and
+    limits XSS blast radius if a future template ever escapes. ``frame-
+    ancestors 'none'`` plus ``X-Frame-Options: DENY`` blocks clickjacking-
+    driven CSRF, ``Referrer-Policy: same-origin`` keeps internal paths out
+    of third-party referrers, and ``X-Content-Type-Options: nosniff`` shuts
+    down MIME-sniffing on user-influenced JSON/HTML responses. HSTS is set
+    only on requests we can confirm reached the app over HTTPS so local HTTP
+    development isn't broken.
+    """
+
+    async def dispatch(  # type: ignore[override]
+        self,
+        request: StarletteRequest,
+        call_next: Any,
+    ) -> StarletteResponse:
+        response: StarletteResponse = await call_next(request)
+        headers = response.headers
+        headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'self'; img-src 'self' data:; "
+            "style-src 'self' 'unsafe-inline'; frame-ancestors 'none'",
+        )
+        headers.setdefault("X-Frame-Options", "DENY")
+        headers.setdefault("X-Content-Type-Options", "nosniff")
+        headers.setdefault("Referrer-Policy", "same-origin")
+        if request.url.scheme == "https":
+            headers.setdefault(
+                "Strict-Transport-Security",
+                "max-age=63072000; includeSubDomains",
+            )
+        return response
 
 
 def _validate_startup_config(settings: Settings) -> None:
@@ -140,6 +181,7 @@ app.add_middleware(
     ProxyHeadersMiddleware,
     trusted_hosts=get_settings().FORWARDED_ALLOW_IPS,
 )
+app.add_middleware(SecurityHeadersMiddleware)
 # Public RSS/Atom routes must be registered *before* the bearer-protected
 # router so that overlapping paths (e.g. ``/feeds/{id}/rss``) match the
 # unauthenticated handler first.
