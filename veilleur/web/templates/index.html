@@ -6,6 +6,7 @@
 
 <h2>Add feed</h2>
 <form class="add-form" method="post" action="{{ url_for('create_feed_form') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <div>
         <label for="url">URL</label>
         <input type="url" name="url" id="url" required placeholder="https://example.com/blog">
@@ -61,14 +62,17 @@
             </td>
             <td class="actions">
                 <form method="post" action="{{ url_for('scrape_feed_form', feed_id=row.feed.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <button type="submit">Scrape</button>
                 </form>
                 {% if row.feed.status == 'paused' %}
                     <form method="post" action="{{ url_for('unpause_feed_form', feed_id=row.feed.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                         <button type="submit">Unpause</button>
                     </form>
                 {% else %}
                     <form method="post" action="{{ url_for('pause_feed_form', feed_id=row.feed.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                         <button type="submit">Pause</button>
                     </form>
                 {% endif %}

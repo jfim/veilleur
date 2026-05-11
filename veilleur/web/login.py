@@ -7,7 +7,7 @@ import time
 from collections import deque
 from pathlib import Path
 
-from fastapi import APIRouter, Form, Request, status
+from fastapi import APIRouter, Depends, Form, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
@@ -17,6 +17,11 @@ from veilleur.web.auth import (
     is_safe_next,
     verify_password,
 )
+from veilleur.web.csrf import require_csrf_token
+
+
+def _csrf(request: Request) -> str:
+    return getattr(request.state, "csrf_token", "")
 
 #: Per-IP login throttle: at most this many failed attempts inside the
 #: rolling window below before further attempts are rejected with 429.
@@ -121,11 +126,16 @@ async def login_form(
             "request": request,
             "next": _resolve_next(next),
             "error": error,
+            "csrf_token": _csrf(request),
         },
     )
 
 
-@login_router.post("/login", name="login_submit")
+@login_router.post(
+    "/login",
+    name="login_submit",
+    dependencies=[Depends(require_csrf_token)],
+)
 async def login_submit(
     request: Request,
     password: str = Form(...),
@@ -142,6 +152,7 @@ async def login_submit(
                 "request": request,
                 "next": target,
                 "error": "Too many failed attempts. Try again in a minute.",
+                "csrf_token": _csrf(request),
             },
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             headers={"Retry-After": str(int(_LOGIN_FAIL_WINDOW_SECONDS))},
@@ -158,6 +169,7 @@ async def login_submit(
                 "request": request,
                 "next": target,
                 "error": "Invalid password.",
+                "csrf_token": _csrf(request),
             },
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
@@ -175,7 +187,11 @@ async def login_submit(
     return response
 
 
-@login_router.post("/logout", name="logout")
+@login_router.post(
+    "/logout",
+    name="logout",
+    dependencies=[Depends(require_csrf_token)],
+)
 async def logout(request: Request) -> Response:
     response = RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
     response.delete_cookie(key=COOKIE_NAME, path="/")

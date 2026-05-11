@@ -41,6 +41,8 @@ XPATH_REPLY = f"articles: 1,2\nxpath: {XPATH}"
 
 
 SESSION_COOKIE = "veilleur_session"
+CSRF_COOKIE = "veilleur_csrf"
+CSRF_TOKEN = "test-csrf-token"
 
 
 @pytest_asyncio.fixture
@@ -49,7 +51,11 @@ async def web_client(api_app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
     async with httpx.AsyncClient(
         transport=transport,
         base_url="http://test",
-        cookies={SESSION_COOKIE: TEST_BEARER_TOKEN},
+        cookies={SESSION_COOKIE: TEST_BEARER_TOKEN, CSRF_COOKIE: CSRF_TOKEN},
+        # Send the matching CSRF token on every request via the header
+        # alternative so individual tests don't have to bake it into each
+        # form payload.
+        headers={"X-CSRF-Token": CSRF_TOKEN},
         follow_redirects=False,
     ) as client:
         yield client
