@@ -134,6 +134,8 @@ All configuration is supplied via environment variables.
 | Variable | Default | Description |
 | --- | --- | --- |
 | `API_BEARER_TOKEN` | _unset_ | Bearer token required by the programmatic REST API. When unset every API request except `/healthz` is rejected. |
+| `API_AUTH_DISABLED` | `false` | When `true`, the REST API and web UI accept all requests with no credential check. Intended for local development; never set in production. |
+| `SESSION_SECRET` | _derived_ | Symmetric secret used to sign the web UI's session cookie via `itsdangerous`. When unset, the value is derived (SHA-256) from `API_BEARER_TOKEN`, so single-replica deployments don't need to set it explicitly. Set it (and keep it stable) when running multiple replicas, or when you want to rotate sessions independently of the bearer credential — rotating `SESSION_SECRET` invalidates every active web UI session without changing the API token. |
 | `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Comma-separated list of proxy IPs whose `X-Forwarded-Proto`/`-For` headers are honoured. Set to `*` (or the proxy's IP) when running behind a TLS-terminating reverse proxy on a different host — otherwise generated form URLs come back as `http://` instead of `https://`. |
 | `LOG_LEVEL` | `INFO` | Python logging level. |
 
