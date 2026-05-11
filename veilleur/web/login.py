@@ -24,6 +24,7 @@ from veilleur.web.csrf import require_csrf_token
 def _csrf(request: Request) -> str:
     return getattr(request.state, "csrf_token", "")
 
+
 #: Per-IP login throttle: at most this many failed attempts inside the
 #: rolling window below before further attempts are rejected with 429.
 #: Successful logins do not consume budget.
@@ -82,6 +83,7 @@ async def _record_failure(ip: str) -> None:
 async def _clear_failures(ip: str) -> None:
     async with _login_failures_lock:
         _login_failures.pop(ip, None)
+
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 _templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
