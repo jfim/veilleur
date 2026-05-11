@@ -25,23 +25,18 @@ async def require_bearer_token(
     settings = get_settings()
     if settings.API_AUTH_DISABLED:
         return
+    # All failure modes return the same opaque 401 so unauthenticated probes
+    # cannot distinguish "server missing token" from "wrong token presented".
+    unauthorized = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="unauthorized",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
     expected = settings.API_BEARER_TOKEN
     if expected is None or expected.get_secret_value() == "":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="API authentication is not configured",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise unauthorized
     if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="missing bearer token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise unauthorized
     presented = authorization.split(" ", 1)[1].strip()
     if not hmac.compare_digest(presented, expected.get_secret_value()):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="invalid bearer token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise unauthorized
