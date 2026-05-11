@@ -5,7 +5,9 @@ RSS/Atom feeds. Point it at a page, and it figures out which links on that
 page are articles, polls the page on a schedule, and serves the result as
 RSS, Atom, or JSON.
 
-<!-- TODO: screenshot of the web UI -->
+![Feed list](images/feed-list.png)
+
+![Feed detail](images/feed-detail.png)
 
 ## Features
 
