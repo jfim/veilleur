@@ -28,6 +28,7 @@ from fastapi import (
 )
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+from pydantic import AnyHttpUrl, ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -251,14 +252,24 @@ async def create_feed_form(
     session: AsyncSession = Depends(get_session),
 ) -> Response:
     settings = get_settings()
-    title = (title or "").strip() or url
+    # Validate the same way the JSON API does so a crafted form value (e.g.
+    # ``javascript:alert(1)``) cannot be persisted and rendered as an
+    # ``<a href="...">`` later. AnyHttpUrl restricts the scheme to http(s).
+    try:
+        validated_url = str(AnyHttpUrl(url))
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="url must be a valid http(s) URL",
+        ) from exc
+    title = (title or "").strip() or validated_url
     interval = poll_interval_seconds or settings.SCRAPE_DEFAULT_INTERVAL_SECONDS
     if interval <= 0:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="poll_interval_seconds must be positive",
         )
-    feed = Feed(url=url, title=title, poll_interval_seconds=interval)
+    feed = Feed(url=validated_url, title=title, poll_interval_seconds=interval)
     session.add(feed)
     try:
         await session.commit()
