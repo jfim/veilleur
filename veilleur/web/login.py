@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+import time
+from collections import deque
 from pathlib import Path
 
 from fastapi import APIRouter, Form, Request, status
@@ -14,6 +17,65 @@ from veilleur.web.auth import (
     is_safe_next,
     verify_password,
 )
+
+#: Per-IP login throttle: at most this many failed attempts inside the
+#: rolling window below before further attempts are rejected with 429.
+#: Successful logins do not consume budget.
+_LOGIN_FAIL_LIMIT = 5
+_LOGIN_FAIL_WINDOW_SECONDS = 60.0
+#: Constant delay applied to every failed attempt. Slows down brute-force
+#: scans without making the legitimate "I fat-fingered my password" path
+#: actively annoying.
+_FAILED_LOGIN_DELAY_SECONDS = 1.0
+
+_login_failures_lock = asyncio.Lock()
+_login_failures: dict[str, deque[float]] = {}
+
+
+def _client_ip(request: Request) -> str:
+    """Best-effort client IP for throttle bookkeeping.
+
+    ``ProxyHeadersMiddleware`` populates ``request.client.host`` from
+    trusted ``X-Forwarded-For`` headers, so behind a configured proxy the
+    real client IP is what we see here. Bare or unknown clients fall back
+    to a literal sentinel so they share one bucket rather than disabling
+    throttling entirely.
+    """
+    if request.client is not None and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+def _purge_old(history: deque[float], now: float) -> None:
+    cutoff = now - _LOGIN_FAIL_WINDOW_SECONDS
+    while history and history[0] < cutoff:
+        history.popleft()
+
+
+async def _too_many_failures(ip: str) -> bool:
+    now = time.monotonic()
+    async with _login_failures_lock:
+        history = _login_failures.get(ip)
+        if history is None:
+            return False
+        _purge_old(history, now)
+        if not history:
+            _login_failures.pop(ip, None)
+            return False
+        return len(history) >= _LOGIN_FAIL_LIMIT
+
+
+async def _record_failure(ip: str) -> None:
+    now = time.monotonic()
+    async with _login_failures_lock:
+        history = _login_failures.setdefault(ip, deque())
+        _purge_old(history, now)
+        history.append(now)
+
+
+async def _clear_failures(ip: str) -> None:
+    async with _login_failures_lock:
+        _login_failures.pop(ip, None)
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 _templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
@@ -71,7 +133,24 @@ async def login_submit(
     next: str = Form(default="/"),
 ) -> Response:
     target = _resolve_next(next)
+    ip = _client_ip(request)
+    if await _too_many_failures(ip):
+        return _templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={
+                "request": request,
+                "next": target,
+                "error": "Too many failed attempts. Try again in a minute.",
+            },
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            headers={"Retry-After": str(int(_LOGIN_FAIL_WINDOW_SECONDS))},
+        )
     if not verify_password(password):
+        await _record_failure(ip)
+        # Constant delay on failure so the loop is bounded even when an
+        # attacker stays just under the per-window cap.
+        await asyncio.sleep(_FAILED_LOGIN_DELAY_SECONDS)
         return _templates.TemplateResponse(
             request=request,
             name="login.html",
@@ -82,6 +161,7 @@ async def login_submit(
             },
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
+    await _clear_failures(ip)
     response = RedirectResponse(url=target, status_code=status.HTTP_303_SEE_OTHER)
     response.set_cookie(
         key=COOKIE_NAME,
