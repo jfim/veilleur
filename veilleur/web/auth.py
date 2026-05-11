@@ -15,7 +15,7 @@ The REST API still uses header-based bearer-token auth — see
 from __future__ import annotations
 
 import hmac
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 from fastapi import HTTPException, Request, status
 
@@ -29,10 +29,17 @@ REMEMBER_ME_MAX_AGE_SECONDS = 60 * 60 * 24 * 30
 def is_safe_next(target: str) -> bool:
     """True when ``target`` is a same-origin path we can safely redirect to.
 
-    Rejects scheme-relative (``//evil.example``) and absolute URLs so a
-    crafted ``?next=`` can't turn the login page into an open redirector.
+    Rejects scheme-relative (``//evil.example``), backslash-prefixed
+    (``/\\evil.example`` — historically normalised to ``//`` by some
+    browsers) and absolute URLs so a crafted ``?next=`` can't turn the
+    login page into an open redirector.
     """
-    return target.startswith("/") and not target.startswith("//")
+    if not target.startswith("/"):
+        return False
+    if len(target) >= 2 and target[1] in ("/", "\\"):
+        return False
+    parsed = urlparse(target)
+    return not parsed.scheme and not parsed.netloc
 
 
 def _login_location(request: Request) -> str:
