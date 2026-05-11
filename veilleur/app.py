@@ -34,6 +34,7 @@ from veilleur.pipeline import ScrapeOutcome, run_scrape
 from veilleur.scheduler import SchedulerLoop
 from veilleur.scraper import PassePartoutClient, validate_raw_html_dir
 from veilleur.web import STATIC_DIR, STATIC_PATH, login_router, web_router
+from veilleur.web.csrf import CSRFCookieMiddleware
 from veilleur.xpath import HttpxLLMClient
 
 logger = logging.getLogger(__name__)
@@ -182,6 +183,7 @@ app.add_middleware(
     trusted_hosts=get_settings().FORWARDED_ALLOW_IPS,
 )
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(CSRFCookieMiddleware)
 # Public RSS/Atom routes must be registered *before* the bearer-protected
 # router so that overlapping paths (e.g. ``/feeds/{id}/rss``) match the
 # unauthenticated handler first.

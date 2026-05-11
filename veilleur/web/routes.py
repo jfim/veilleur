@@ -42,6 +42,7 @@ from veilleur.feeds.render import MAX_ITEMS
 from veilleur.pipeline import run_scrape
 from veilleur.scraper import Scraper
 from veilleur.web.auth import require_session_cookie
+from veilleur.web.csrf import require_csrf_token
 from veilleur.xpath import LLMClient
 from veilleur.xpath import prompt as xpath_prompt
 
@@ -88,7 +89,7 @@ templates.env.globals["static_url"] = _static_url  # type: ignore[assignment]
 
 web_router = APIRouter(
     tags=["web-ui"],
-    dependencies=[Depends(require_session_cookie)],
+    dependencies=[Depends(require_session_cookie), Depends(require_csrf_token)],
     default_response_class=HTMLResponse,
 )
 
@@ -143,6 +144,7 @@ def _render(
     payload: dict[str, Any] = {"request": request, **context}
     payload.setdefault("flash", _flash_from_query(request))
     payload.setdefault("auto_refresh", False)
+    payload.setdefault("csrf_token", getattr(request.state, "csrf_token", ""))
     return templates.TemplateResponse(
         request=request,
         name=template,

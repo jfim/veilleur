@@ -30,23 +30,28 @@
 <h3>Actions</h3>
 <div class="actions">
     <form method="post" action="{{ url_for('scrape_feed_form', feed_id=feed.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button type="submit" class="primary">Scrape now</button>
     </form>
     <form method="post" action="{{ url_for('regenerate_xpath_form', feed_id=feed.id) }}"
           onsubmit="return confirm('Force a fresh xpath derivation? The current xpath will be replaced on success.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button type="submit">Regenerate xpath</button>
     </form>
     {% if feed.status == 'paused' %}
         <form method="post" action="{{ url_for('unpause_feed_form', feed_id=feed.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <button type="submit">Unpause</button>
         </form>
     {% else %}
         <form method="post" action="{{ url_for('pause_feed_form', feed_id=feed.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <button type="submit">Pause</button>
         </form>
     {% endif %}
     <form method="post" action="{{ url_for('delete_feed_form', feed_id=feed.id) }}"
           onsubmit="return confirm('Delete this feed and all its items?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="_method" value="DELETE">
         <button type="submit" class="danger">Delete</button>
     </form>
@@ -55,6 +60,7 @@
 <h3>Edit</h3>
 <form method="post" action="{{ url_for('update_feed_form', feed_id=feed.id) }}"
       class="add-form" style="grid-template-columns: 2fr 1fr auto;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <div>
         <label for="title">Title</label>
         <input type="text" name="title" id="title" value="{{ feed.title }}">

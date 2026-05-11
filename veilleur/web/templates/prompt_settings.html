@@ -40,6 +40,7 @@
 
 {% if override_path is not none %}
 <form method="post" action="{{ url_for('prompt_settings_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <textarea name="prompt" rows="20" style="width: 100%; font-family: monospace;">{{ prompt_text }}</textarea>
     <div class="actions" style="margin-top: 0.5rem;">
         <button type="submit" class="primary">Save</button>
@@ -50,6 +51,7 @@
 <form method="post" action="{{ url_for('prompt_settings_reset') }}"
       onsubmit="return confirm('Discard the override and use the bundled default?');"
       style="margin-top: 0.5rem;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <button type="submit">Reset to default</button>
 </form>
 {% endif %}
