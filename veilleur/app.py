@@ -29,7 +29,7 @@ from veilleur.feeds import feeds_public_router
 from veilleur.pipeline import ScrapeOutcome, run_scrape
 from veilleur.scheduler import SchedulerLoop
 from veilleur.scraper import PassePartoutClient, validate_raw_html_dir
-from veilleur.web import STATIC_DIR, STATIC_PATH, web_router
+from veilleur.web import STATIC_DIR, STATIC_PATH, login_router, web_router
 from veilleur.xpath import HttpxLLMClient
 
 logger = logging.getLogger(__name__)
@@ -145,6 +145,9 @@ app.add_middleware(
 # unauthenticated handler first.
 app.include_router(feeds_public_router)
 app.include_router(api_router)
+# Login routes must be registered *before* ``web_router`` so they aren't
+# shadowed by its auth dependency.
+app.include_router(login_router)
 app.include_router(web_router)
 app.mount(STATIC_PATH, StaticFiles(directory=str(STATIC_DIR)), name="static")
 

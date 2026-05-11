@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Log in — Veilleur{% endblock %}
+{% block content %}
+<section class="login">
+    <h2>Log in</h2>
+    {% if error %}
+    <div class="flash error">{{ error }}</div>
+    {% endif %}
+    <form method="post" action="{{ url_for('login_submit') }}" autocomplete="on">
+        <input type="hidden" name="next" value="{{ next }}">
+        <label for="password">Password</label>
+        <input id="password"
+               name="password"
+               type="password"
+               autocomplete="current-password"
+               autofocus
+               required>
+        <label class="checkbox">
+            <input type="checkbox" name="remember_me" value="1">
+            Remember me for 30 days
+        </label>
+        <button type="submit">Log in</button>
+    </form>
+</section>
+{% endblock %}

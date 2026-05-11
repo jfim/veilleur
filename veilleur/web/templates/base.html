@@ -12,6 +12,11 @@
 <body>
 <header class="site">
     <h1><a href="{{ url_for('index') }}">Veilleur</a></h1>
+    {% if request.cookies.get('veilleur_session') %}
+    <form class="logout" method="post" action="{{ url_for('logout') }}">
+        <button type="submit">Log out</button>
+    </form>
+    {% endif %}
 </header>
 <main>
     {% if flash %}
