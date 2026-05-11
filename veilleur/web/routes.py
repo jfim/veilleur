@@ -40,7 +40,7 @@ from veilleur.db.session import get_session
 from veilleur.feeds.render import MAX_ITEMS
 from veilleur.pipeline import run_scrape
 from veilleur.scraper import Scraper
-from veilleur.web.auth import require_basic_auth
+from veilleur.web.auth import require_session_cookie
 from veilleur.xpath import LLMClient
 from veilleur.xpath import prompt as xpath_prompt
 
@@ -87,7 +87,7 @@ templates.env.globals["static_url"] = _static_url  # type: ignore[assignment]
 
 web_router = APIRouter(
     tags=["web-ui"],
-    dependencies=[Depends(require_basic_auth)],
+    dependencies=[Depends(require_session_cookie)],
     default_response_class=HTMLResponse,
 )
 

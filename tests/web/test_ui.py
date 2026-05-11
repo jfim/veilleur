@@ -8,7 +8,6 @@ truncate-between-tests semantics, and bearer-token configuration.
 
 from __future__ import annotations
 
-import base64
 import os
 import uuid
 from collections.abc import AsyncIterator
@@ -41,9 +40,7 @@ XPATH = "//main//article//h2/a"
 XPATH_REPLY = f"articles: 1,2\nxpath: {XPATH}"
 
 
-def _basic_auth_header(password: str = TEST_BEARER_TOKEN, user: str = "admin") -> str:
-    raw = f"{user}:{password}".encode()
-    return "Basic " + base64.b64encode(raw).decode("ascii")
+SESSION_COOKIE = "veilleur_session"
 
 
 @pytest_asyncio.fixture
@@ -52,7 +49,7 @@ async def web_client(api_app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
     async with httpx.AsyncClient(
         transport=transport,
         base_url="http://test",
-        headers={"Authorization": _basic_auth_header()},
+        cookies={SESSION_COOKIE: TEST_BEARER_TOKEN},
         follow_redirects=False,
     ) as client:
         yield client
@@ -62,18 +59,96 @@ async def web_client(api_app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
 
 
 @pytest.mark.asyncio
-async def test_index_requires_basic_auth(web_client: httpx.AsyncClient) -> None:
-    web_client.headers.pop("Authorization", None)
+async def test_index_redirects_to_login_when_unauthenticated(
+    web_client: httpx.AsyncClient,
+) -> None:
+    web_client.cookies.delete(SESSION_COOKIE)
     r = await web_client.get("/")
-    assert r.status_code == 401
-    assert r.headers["WWW-Authenticate"].lower().startswith("basic")
+    assert r.status_code == 303
+    assert r.headers["Location"].startswith("/login")
 
 
 @pytest.mark.asyncio
-async def test_wrong_basic_password_rejected(web_client: httpx.AsyncClient) -> None:
-    web_client.headers["Authorization"] = _basic_auth_header(password="nope")
+async def test_index_preserves_next_on_redirect(web_client: httpx.AsyncClient) -> None:
+    web_client.cookies.delete(SESSION_COOKIE)
+    r = await web_client.get("/ui/settings/prompt")
+    assert r.status_code == 303
+    assert r.headers["Location"] == "/login?next=/ui/settings/prompt"
+
+
+@pytest.mark.asyncio
+async def test_wrong_cookie_rejected(web_client: httpx.AsyncClient) -> None:
+    web_client.cookies.set(SESSION_COOKIE, "not-the-token")
     r = await web_client.get("/")
+    assert r.status_code == 303
+    assert r.headers["Location"].startswith("/login")
+
+
+@pytest.mark.asyncio
+async def test_login_form_renders(web_client: httpx.AsyncClient) -> None:
+    web_client.cookies.delete(SESSION_COOKIE)
+    r = await web_client.get("/login")
+    assert r.status_code == 200
+    assert 'name="password"' in r.text
+    assert 'name="remember_me"' in r.text
+
+
+@pytest.mark.asyncio
+async def test_login_submit_sets_cookie_and_redirects(web_client: httpx.AsyncClient) -> None:
+    web_client.cookies.delete(SESSION_COOKIE)
+    r = await web_client.post(
+        "/login",
+        data={"password": TEST_BEARER_TOKEN, "next": "/"},
+    )
+    assert r.status_code == 303
+    assert r.headers["Location"] == "/"
+    assert SESSION_COOKIE in r.cookies
+    assert r.cookies[SESSION_COOKIE] == TEST_BEARER_TOKEN
+
+
+@pytest.mark.asyncio
+async def test_login_submit_with_remember_me_sets_max_age(
+    web_client: httpx.AsyncClient,
+) -> None:
+    web_client.cookies.delete(SESSION_COOKIE)
+    r = await web_client.post(
+        "/login",
+        data={"password": TEST_BEARER_TOKEN, "remember_me": "1", "next": "/"},
+    )
+    assert r.status_code == 303
+    set_cookie = r.headers["set-cookie"].lower()
+    assert "max-age=" in set_cookie
+
+
+@pytest.mark.asyncio
+async def test_login_submit_rejects_bad_password(web_client: httpx.AsyncClient) -> None:
+    web_client.cookies.delete(SESSION_COOKIE)
+    r = await web_client.post("/login", data={"password": "wrong", "next": "/"})
     assert r.status_code == 401
+    assert "Invalid password" in r.text
+    assert SESSION_COOKIE not in r.cookies
+
+
+@pytest.mark.asyncio
+async def test_login_submit_rejects_open_redirect(web_client: httpx.AsyncClient) -> None:
+    web_client.cookies.delete(SESSION_COOKIE)
+    r = await web_client.post(
+        "/login",
+        data={"password": TEST_BEARER_TOKEN, "next": "//evil.example/x"},
+    )
+    assert r.status_code == 303
+    assert r.headers["Location"] == "/"
+
+
+@pytest.mark.asyncio
+async def test_logout_clears_cookie(web_client: httpx.AsyncClient) -> None:
+    r = await web_client.post("/logout")
+    assert r.status_code == 303
+    assert r.headers["Location"] == "/login"
+    set_cookie = r.headers["set-cookie"].lower()
+    assert SESSION_COOKIE in set_cookie
+    # delete_cookie sets Max-Age=0 (or an expired date)
+    assert "max-age=0" in set_cookie or "expires=" in set_cookie
 
 
 @pytest.mark.asyncio
@@ -84,7 +159,7 @@ async def test_unset_token_rejects_web_ui(api_app: FastAPI, web_client: httpx.As
     get_settings.cache_clear()
     try:
         r = await web_client.get("/")
-        assert r.status_code == 401
+        assert r.status_code == 503
     finally:
         if old is not None:
             os.environ["API_BEARER_TOKEN"] = old

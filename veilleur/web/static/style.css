@@ -35,11 +35,51 @@ header.site {
     background: var(--surface);
     border-bottom: 1px solid var(--border);
     padding: 0.75rem 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
 }
 
 header.site h1 {
     margin: 0;
     font-size: 1.15rem;
+}
+
+header.site form.logout {
+    margin: 0;
+}
+
+header.site form.logout button {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: inherit;
+    padding: 0.25rem 0.6rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+section.login {
+    max-width: 22rem;
+    margin: 3rem auto;
+    padding: 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+}
+
+section.login form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+section.login label.checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: normal;
 }
 
 header.site a {
