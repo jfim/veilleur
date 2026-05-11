@@ -35,13 +35,22 @@ def validate_raw_html_dir(path: Path) -> None:
         path.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
         raise RuntimeError(f"RAW_HTML_DIR {path!s} could not be created: {exc}") from exc
-    # Probe writability with a temp file.
+    # Probe writability with a temp file *before* the chmod below so an
+    # operator-imposed read-only mode still surfaces as a clear error.
     probe = path / ".veilleur-write-probe"
     try:
         probe.write_bytes(b"")
         probe.unlink()
     except OSError as exc:
         raise RuntimeError(f"RAW_HTML_DIR {path!s} is not writable: {exc}") from exc
+    # Stored HTML may include cookies / PII that loaded in passe-partout's
+    # headless browser, so restrict the directory to the owner only.
+    try:
+        path.chmod(0o700)
+    except OSError as exc:
+        raise RuntimeError(
+            f"RAW_HTML_DIR {path!s} permissions could not be tightened to 0700: {exc}"
+        ) from exc
 
 
 def _relative_path(*, feed_id: uuid.UUID, run_id: uuid.UUID, when: datetime) -> Path:
@@ -70,8 +79,16 @@ def write_html(
     rel = _relative_path(feed_id=feed_id, run_id=run_id, when=when)
     target = raw_html_dir / rel
     target.parent.mkdir(parents=True, exist_ok=True)
+    # Tighten any directories `mkdir(parents=True)` created — it honours the
+    # process umask rather than our 0o700 default, so explicitly chmod each
+    # subdirectory we own (everything strictly under raw_html_dir).
+    for parent in target.parents:
+        if parent == raw_html_dir or not parent.is_relative_to(raw_html_dir):
+            break
+        parent.chmod(0o700)
     with gzip.open(target, "wb") as fh:
         fh.write(html.encode("utf-8"))
+    target.chmod(0o600)
     return str(rel)
 
 
