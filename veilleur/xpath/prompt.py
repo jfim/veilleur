@@ -110,9 +110,7 @@ def save_template(text: str) -> bool:
     if path is None:
         raise RuntimeError("PROMPT_FILE is not configured; cannot persist prompt overrides")
     if len(text.encode("utf-8")) > MAX_PROMPT_BYTES:
-        raise PromptTooLargeError(
-            f"prompt template exceeds the {MAX_PROMPT_BYTES}-byte cap"
-        )
+        raise PromptTooLargeError(f"prompt template exceeds the {MAX_PROMPT_BYTES}-byte cap")
     if is_default(text):
         reset_to_default()
         return False

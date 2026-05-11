@@ -24,7 +24,6 @@ from veilleur.xpath.types import (
     XPathWrongElementError,
 )
 
-
 #: HTML parser configured to refuse network access, decline to follow
 #: external entity references, and bail out on absurdly deep trees so a
 #: hostile page can't trigger an XXE fetch or exhaust memory while parsing.

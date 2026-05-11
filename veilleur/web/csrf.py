@@ -93,9 +93,7 @@ async def require_csrf_token(request: Request) -> None:
     # parsed FormData so the route handler's Form(...) parameters still see
     # the same values.
     content_type = request.headers.get("content-type", "")
-    if content_type.startswith(
-        ("application/x-www-form-urlencoded", "multipart/form-data")
-    ):
+    if content_type.startswith(("application/x-www-form-urlencoded", "multipart/form-data")):
         form = await request.form()
         form_token = form.get(CSRF_FORM_FIELD)
         if isinstance(form_token, str) and hmac.compare_digest(form_token, cookie_token):
