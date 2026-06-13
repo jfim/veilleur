@@ -14,7 +14,10 @@ from veilleur.db.base import Base
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers defaults to True, which would silence every
+    # logger already created (e.g. veilleur.* module loggers) whenever
+    # migrations run in-process — breaking app log output and test capture.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 settings = get_settings()
 config.set_main_option("sqlalchemy.url", settings.database_url_sync)

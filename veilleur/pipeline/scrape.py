@@ -393,20 +393,12 @@ async def _try_regenerate_or_fail(
             root=anchors.root,  # type: ignore[arg-type]
             elements=anchors.elements,
         )
-    except XPathDerivationFailed as exc:
-        return await _finalize_failure(
-            factory,
-            run_id,
-            feed_id,
-            f"regenerate failed ({reason}): {exc}",
-            http_status=fetch.status_code,
-            raw_html=fetch.html,
-            xpath_attempts=None,
-        )
     except XPathToolkitError as exc:
-        # Catches LLMClientError and any other toolkit-level failure
-        # (transport, auth, malformed reply) so the scrape_run row is
-        # finalized as failed rather than left orphaned at "running".
+        # Catches XPathDerivationFailed, LLMClientError, and any other
+        # toolkit-level failure (transport, auth, malformed reply) so the
+        # scrape_run row is finalized as failed rather than left orphaned at
+        # "running". ``exc.attempts`` carries whatever turns ran before the
+        # failure, so the per-turn trace survives in scrape_runs.xpath_attempts.
         return await _finalize_failure(
             factory,
             run_id,
@@ -414,7 +406,7 @@ async def _try_regenerate_or_fail(
             f"regenerate failed ({reason}): {exc}",
             http_status=fetch.status_code,
             raw_html=fetch.html,
-            xpath_attempts=None,
+            xpath_attempts=_serialize_attempts(exc.attempts),
         )
     new_xpath = outcome.xpath
     attempts_serialized = _serialize_attempts(outcome.attempts)

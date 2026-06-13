@@ -20,6 +20,7 @@ The concrete :class:`HttpxLLMClient` here speaks the OpenAI-compatible
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import re
 from dataclasses import dataclass
@@ -35,7 +36,10 @@ from veilleur.xpath.types import (
     LLMClientError,
     XPathAttempt,
     XPathDerivationFailed,
+    XPathToolkitError,
 )
+
+logger = logging.getLogger(__name__)
 
 #: Bundled default. Kept as a re-export for back-compat; the active
 #: template (potentially overridden via ``PROMPT_FILE``) is
@@ -335,93 +339,151 @@ async def derive_xpath(
         id_by_element = {}
 
     attempts: list[XPathAttempt] = []
-    for turn in range(1, max_attempts + 1):
-        prompt = render_prompt(title, url, anchors, attempts)
-        raw = await client.complete(prompt)
-        parsed = _parse_reply(raw, max_id=len(anchors))
-
-        if parsed.unable:
-            attempts.append(
-                XPathAttempt(
-                    turn=turn,
-                    xpath=None,
-                    intended_ids=(),
-                    actual_ids=(),
-                    extras_outside_listing=0,
-                    parse_error=None,
-                    unable=True,
-                    ok=False,
-                )
+    try:
+        for turn in range(1, max_attempts + 1):
+            logger.info(
+                "xpath derivation turn %d/%d: requesting xpath from LLM (%d anchors)",
+                turn,
+                max_attempts,
+                len(anchors),
             )
-            raise XPathDerivationFailed(f"LLM returned 'unable' on attempt {turn}/{max_attempts}")
+            prompt = render_prompt(title, url, anchors, attempts)
+            raw = await client.complete(prompt)
+            parsed = _parse_reply(raw, max_id=len(anchors))
 
-        if parsed.parse_error is not None or parsed.xpath is None:
-            attempts.append(
-                XPathAttempt(
-                    turn=turn,
-                    xpath=None,
-                    intended_ids=(),
-                    actual_ids=(),
-                    extras_outside_listing=0,
-                    parse_error=parsed.parse_error or "unknown parse failure",
-                    unable=False,
-                    ok=False,
+            if parsed.unable:
+                attempts.append(
+                    XPathAttempt(
+                        turn=turn,
+                        xpath=None,
+                        intended_ids=(),
+                        actual_ids=(),
+                        extras_outside_listing=0,
+                        parse_error=None,
+                        unable=True,
+                        ok=False,
+                    )
                 )
-            )
-            continue
+                logger.warning(
+                    "xpath derivation turn %d/%d: model replied 'unable'", turn, max_attempts
+                )
+                raise XPathDerivationFailed(
+                    f"LLM returned 'unable' on attempt {turn}/{max_attempts}"
+                )
 
-        if root is None:
-            # Pure single-shot mode: trust the reply.
+            if parsed.parse_error is not None or parsed.xpath is None:
+                reason = parsed.parse_error or "unknown parse failure"
+                attempts.append(
+                    XPathAttempt(
+                        turn=turn,
+                        xpath=None,
+                        intended_ids=(),
+                        actual_ids=(),
+                        extras_outside_listing=0,
+                        parse_error=reason,
+                        unable=False,
+                        ok=False,
+                    )
+                )
+                logger.warning(
+                    "xpath derivation turn %d/%d: unparseable reply: %s",
+                    turn,
+                    max_attempts,
+                    reason,
+                )
+                continue
+
+            if root is None:
+                # Pure single-shot mode: trust the reply.
+                attempts.append(
+                    XPathAttempt(
+                        turn=turn,
+                        xpath=parsed.xpath,
+                        intended_ids=parsed.intended_ids,
+                        actual_ids=parsed.intended_ids,
+                        extras_outside_listing=0,
+                        parse_error=None,
+                        unable=False,
+                        ok=True,
+                    )
+                )
+                logger.info(
+                    "xpath derivation turn %d/%d: accepted %r (single-shot)",
+                    turn,
+                    max_attempts,
+                    parsed.xpath,
+                )
+                return DerivationOutcome(xpath=parsed.xpath, attempts=tuple(attempts))
+
+            run_result = _run_xpath(root, parsed.xpath, id_by_element)
+            if isinstance(run_result, str):
+                attempts.append(
+                    XPathAttempt(
+                        turn=turn,
+                        xpath=parsed.xpath,
+                        intended_ids=parsed.intended_ids,
+                        actual_ids=(),
+                        extras_outside_listing=0,
+                        parse_error=run_result,
+                        unable=False,
+                        ok=False,
+                    )
+                )
+                logger.warning(
+                    "xpath derivation turn %d/%d: %r failed to evaluate: %s",
+                    turn,
+                    max_attempts,
+                    parsed.xpath,
+                    run_result,
+                )
+                continue
+
+            actual_ids, extras = run_result
+            ok = extras == 0 and tuple(sorted(parsed.intended_ids)) == tuple(sorted(actual_ids))
             attempts.append(
                 XPathAttempt(
                     turn=turn,
                     xpath=parsed.xpath,
                     intended_ids=parsed.intended_ids,
-                    actual_ids=parsed.intended_ids,
-                    extras_outside_listing=0,
+                    actual_ids=actual_ids,
+                    extras_outside_listing=extras,
                     parse_error=None,
                     unable=False,
-                    ok=True,
+                    ok=ok,
                 )
             )
-            return DerivationOutcome(xpath=parsed.xpath, attempts=tuple(attempts))
-
-        run_result = _run_xpath(root, parsed.xpath, id_by_element)
-        if isinstance(run_result, str):
-            attempts.append(
-                XPathAttempt(
-                    turn=turn,
-                    xpath=parsed.xpath,
-                    intended_ids=parsed.intended_ids,
-                    actual_ids=(),
-                    extras_outside_listing=0,
-                    parse_error=run_result,
-                    unable=False,
-                    ok=False,
+            if ok:
+                logger.info(
+                    "xpath derivation turn %d/%d: %r matched all %d intended anchor(s)",
+                    turn,
+                    max_attempts,
+                    parsed.xpath,
+                    len(actual_ids),
                 )
+                return DerivationOutcome(xpath=parsed.xpath, attempts=tuple(attempts))
+            logger.info(
+                "xpath derivation turn %d/%d: %r matched %d anchor(s) "
+                "(intended %d, %d outside listing); retrying",
+                turn,
+                max_attempts,
+                parsed.xpath,
+                len(actual_ids),
+                len(parsed.intended_ids),
+                extras,
             )
-            continue
 
-        actual_ids, extras = run_result
-        ok = extras == 0 and tuple(sorted(parsed.intended_ids)) == tuple(sorted(actual_ids))
-        attempts.append(
-            XPathAttempt(
-                turn=turn,
-                xpath=parsed.xpath,
-                intended_ids=parsed.intended_ids,
-                actual_ids=actual_ids,
-                extras_outside_listing=extras,
-                parse_error=None,
-                unable=False,
-                ok=ok,
-            )
+        logger.warning(
+            "xpath derivation exhausted %d attempt(s) without a matching xpath", max_attempts
         )
-        if ok:
-            return DerivationOutcome(xpath=parsed.xpath, attempts=tuple(attempts))
-
-    raise XPathDerivationFailed(
-        f"LLM did not converge on a matching xpath in {max_attempts} attempt(s)"
-    )
+        raise XPathDerivationFailed(
+            f"LLM did not converge on a matching xpath in {max_attempts} attempt(s)"
+        )
+    except XPathToolkitError as exc:
+        # Surface the turns that ran so the caller can persist them, even when
+        # the failure originated in the LLM transport (e.g. a 429 mid-loop).
+        if not exc.attempts:
+            exc.attempts = tuple(attempts)
+        raise
 
 
 def _resolve_max_attempts() -> int:
@@ -507,6 +569,14 @@ class HttpxLLMClient:
         last_status: int | None = None
         last_body: str | None = None
         for attempt in range(1, max_retries + 1):
+            logger.info(
+                "LLM request to %s (model=%s, attempt %d/%d, %d-char prompt)",
+                endpoint,
+                self._model,
+                attempt,
+                max_retries,
+                len(prompt),
+            )
             try:
                 response = await self._http.post(endpoint, json=payload, headers=headers)
             except httpx.HTTPError as exc:
@@ -515,12 +585,20 @@ class HttpxLLMClient:
                     raise LLMClientError(
                         f"transport error calling {endpoint} after {max_retries} attempts: {exc}"
                     ) from exc
+                logger.warning(
+                    "LLM transport error (attempt %d/%d), retrying in %.1fs: %s",
+                    attempt,
+                    max_retries,
+                    backoff,
+                    exc,
+                )
                 await asyncio.sleep(backoff)
                 backoff *= 2
                 continue
 
             status = response.status_code
             if 200 <= status < 300:
+                logger.info("LLM responded HTTP %d from %s", status, endpoint)
                 break
             if status == 429 or 500 <= status < 600:
                 last_status = status
@@ -529,6 +607,13 @@ class HttpxLLMClient:
                     raise LLMClientError(
                         f"LLM returned HTTP {status} after {max_retries} attempts: {last_body}"
                     )
+                logger.warning(
+                    "LLM returned HTTP %d (attempt %d/%d), retrying in %.1fs",
+                    status,
+                    attempt,
+                    max_retries,
+                    backoff,
+                )
                 await asyncio.sleep(backoff)
                 backoff *= 2
                 continue

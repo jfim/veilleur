@@ -388,6 +388,114 @@ def test_httpx_client_constructor_validates() -> None:
         asyncio.get_event_loop().run_until_complete(http.aclose())
 
 
+async def test_failed_derivation_carries_attempt_trace() -> None:
+    """When the budget is exhausted, the raised error carries every attempt."""
+    extraction = extract_anchors(SAMPLE_HTML, "https://example.com/")
+    bad = "articles: 1\nxpath: //a"  # parses but never matches intended id 1
+    client = FakeLLMClient([bad, bad, bad])
+    with pytest.raises(XPathDerivationFailed) as excinfo:
+        await derive_xpath(
+            extraction.title,
+            "https://example.com/",
+            extraction.anchors,
+            client,
+            root=extraction.root,
+            elements=extraction.elements,
+            max_attempts=3,
+        )
+    assert len(excinfo.value.attempts) == 3
+    assert all(not a.ok for a in excinfo.value.attempts)
+
+
+async def test_llm_error_mid_loop_carries_prior_attempts() -> None:
+    """A transport/429 failure mid-loop still surfaces the turns that ran."""
+
+    class _OneThenRaise:
+        def __init__(self, reply: str, exc: Exception) -> None:
+            self._reply: str | None = reply
+            self._exc = exc
+            self.prompts: list[str] = []
+
+        async def complete(self, prompt: str) -> str:
+            self.prompts.append(prompt)
+            if self._reply is not None:
+                reply, self._reply = self._reply, None
+                return reply
+            raise self._exc
+
+    extraction = extract_anchors(SAMPLE_HTML, "https://example.com/")
+    bad = "articles: 1\nxpath: //a"  # turn 1 mismatch → recorded, loop continues
+    client = _OneThenRaise(bad, LLMClientError("LLM returned HTTP 429 after 3 attempts"))
+    with pytest.raises(LLMClientError) as excinfo:
+        await derive_xpath(
+            extraction.title,
+            "https://example.com/",
+            extraction.anchors,
+            client,
+            root=extraction.root,
+            elements=extraction.elements,
+            max_attempts=3,
+        )
+    assert len(excinfo.value.attempts) == 1
+    assert excinfo.value.attempts[0].turn == 1
+
+
+async def test_derive_xpath_logs_each_turn(caplog: pytest.LogCaptureFixture) -> None:
+    import logging
+
+    extraction = extract_anchors(SAMPLE_HTML, "https://example.com/")
+    bad = "articles: 1\nxpath: //a"
+    client = FakeLLMClient([bad, bad])
+    with (
+        caplog.at_level(logging.INFO, logger="veilleur.xpath.derive"),
+        pytest.raises(XPathDerivationFailed),
+    ):
+        await derive_xpath(
+            extraction.title,
+            "https://example.com/",
+            extraction.anchors,
+            client,
+            root=extraction.root,
+            elements=extraction.elements,
+            max_attempts=2,
+        )
+    msgs = " ".join(r.getMessage() for r in caplog.records)
+    assert "turn 1/2" in msgs
+    assert "turn 2/2" in msgs
+
+
+async def test_httpx_client_logs_retry_on_429(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    import asyncio
+    import logging
+
+    async def _no_sleep(_: float) -> None:
+        return
+
+    monkeypatch.setattr(asyncio, "sleep", _no_sleep)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, text="rate limited")
+
+    transport = _mock_transport(handler)
+    async with httpx.AsyncClient(transport=transport) as http:
+        client = HttpxLLMClient(
+            api_url="https://api.example.com/v1",
+            model="m",
+            api_key="k",
+            http=http,
+        )
+        with (
+            caplog.at_level(logging.WARNING, logger="veilleur.xpath.derive"),
+            pytest.raises(LLMClientError),
+        ):
+            await client.complete("p")
+    msgs = " ".join(r.getMessage() for r in caplog.records)
+    assert "429" in msgs
+    assert "retry" in msgs.lower()
+
+
 async def test_from_env_missing_vars_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("LLM_API_URL", raising=False)
     monkeypatch.delenv("LLM_MODEL_NAME", raising=False)

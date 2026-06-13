@@ -183,7 +183,15 @@ class LLMClient(Protocol):
 
 
 class XPathToolkitError(Exception):
-    """Base class for all xpath-toolkit errors."""
+    """Base class for all xpath-toolkit errors.
+
+    ``attempts`` carries the per-turn derivation trace when the failure
+    happened during (or after) the ``derive_xpath`` loop, so callers can
+    persist it for debugging. It stays empty for errors raised before any
+    turn ran (config/validation errors).
+    """
+
+    attempts: tuple[XPathAttempt, ...] = ()
 
 
 class AnchorExtractionError(XPathToolkitError):

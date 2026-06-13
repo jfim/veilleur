@@ -30,6 +30,7 @@ from veilleur.api.routes import api_router
 from veilleur.config import Settings, get_settings
 from veilleur.db.session import get_session, get_session_factory
 from veilleur.feeds import feeds_public_router
+from veilleur.logging_setup import configure_logging
 from veilleur.pipeline import ScrapeOutcome, recover_stale_runs, run_scrape
 from veilleur.scheduler import SchedulerLoop
 from veilleur.scraper import PassePartoutClient, validate_raw_html_dir
@@ -148,6 +149,7 @@ def _build_scheduler() -> tuple[SchedulerLoop, list[object]]:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     settings = get_settings()
+    configure_logging(settings.LOG_LEVEL)
     _validate_startup_config(settings)
     if settings.RAW_HTML_DIR is not None:
         # Fail fast on a misconfigured directory rather than discovering it

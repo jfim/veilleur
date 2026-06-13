@@ -362,6 +362,36 @@ async def test_regeneration_fail_marks_feed_failed(
 
 
 @pytest.mark.asyncio
+async def test_failed_regeneration_persists_xpath_attempts(
+    pipeline_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A forced regeneration that never converges still records the attempt trace."""
+    feed_id = await _make_feed(pipeline_factory)
+    scraper = FakePassePartout()
+    scraper.register("https://example.com/", html=HTML_INITIAL)
+
+    # Parses fine but intends id 1 (a nav link) while the xpath matches the
+    # three posts → ok=False every turn → budget exhausted → failure.
+    bad = _reply([1], XPATH_GOOD)
+    llm = FakeLLMClient([bad], cycle=True)
+
+    outcome = await run_scrape(
+        feed_id,
+        scraper=scraper,
+        llm=llm,
+        session_factory=pipeline_factory,
+        force_regenerate=True,
+    )
+    assert outcome.status == "failed"
+
+    async with pipeline_factory() as s:
+        run = (await s.execute(select(ScrapeRun).where(ScrapeRun.feed_id == feed_id))).scalar_one()
+        assert run.xpath_attempts is not None
+        assert len(run.xpath_attempts) >= 1
+        assert all(a["ok"] is False for a in run.xpath_attempts)
+
+
+@pytest.mark.asyncio
 async def test_recovery_clears_failure_reason(
     pipeline_factory: async_sessionmaker[AsyncSession],
 ) -> None:
