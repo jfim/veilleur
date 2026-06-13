@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from veilleur.db.models import Feed
+from veilleur.db.models import Feed, ScrapeRun
 from veilleur.pipeline import ScrapeOutcome
 from veilleur.scheduler import SchedulerLoop, pick_due_feed
 
@@ -164,6 +164,39 @@ async def test_tick_no_due_feed_no_scrape(
     loop = SchedulerLoop(scrape=fake_scrape, session_factory=scheduler_factory, tick_seconds=1.0)
     assert await loop.tick() is None
     assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_tick_sweeps_stale_running_run(
+    scheduler_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Each tick reaps runs that have been ``running`` past the staleness cutoff."""
+    feed_id = await _make_feed(scheduler_factory, status="paused")  # no due feed to scrape
+    async with scheduler_factory() as session:
+        stale = ScrapeRun(
+            feed_id=feed_id,
+            status="running",
+            started_at=datetime.now(UTC) - timedelta(minutes=30),
+        )
+        session.add(stale)
+        await session.commit()
+        stale_id = stale.id
+
+    async def fake_scrape(fid: uuid.UUID) -> ScrapeOutcome:
+        return _ok_outcome()
+
+    loop = SchedulerLoop(
+        scrape=fake_scrape,
+        session_factory=scheduler_factory,
+        tick_seconds=1.0,
+        stale_run_timeout=timedelta(minutes=15),
+    )
+    await loop.tick()
+
+    async with scheduler_factory() as session:
+        run = await session.get(ScrapeRun, stale_id)
+        assert run is not None
+        assert run.status == "failed"
 
 
 @pytest.mark.asyncio

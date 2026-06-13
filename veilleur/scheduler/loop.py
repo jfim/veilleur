@@ -18,12 +18,13 @@ import contextlib
 import logging
 import uuid
 from collections.abc import Awaitable, Callable
+from datetime import timedelta
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from veilleur.db.models import Feed
-from veilleur.pipeline import ScrapeOutcome
+from veilleur.pipeline import STALE_RUN_TIMEOUT, ScrapeOutcome, recover_stale_runs
 
 logger = logging.getLogger(__name__)
 
@@ -67,12 +68,14 @@ class SchedulerLoop:
         scrape: ScrapeCallable,
         session_factory: async_sessionmaker[AsyncSession],
         tick_seconds: float = 30.0,
+        stale_run_timeout: timedelta = STALE_RUN_TIMEOUT,
     ) -> None:
         if tick_seconds <= 0:
             raise ValueError("tick_seconds must be positive")
         self._scrape = scrape
         self._session_factory = session_factory
         self._tick_seconds = tick_seconds
+        self._stale_run_timeout = stale_run_timeout
         self._stop_event = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
 
@@ -100,6 +103,10 @@ class SchedulerLoop:
 
     async def tick(self) -> uuid.UUID | None:
         """Run one iteration: pick a due feed, scrape if any. Returns the id."""
+        try:
+            await recover_stale_runs(self._session_factory, older_than=self._stale_run_timeout)
+        except Exception:
+            logger.exception("scheduler: stale-run sweep failed")
         try:
             feed_id = await pick_due_feed(self._session_factory)
         except Exception:

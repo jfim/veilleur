@@ -30,7 +30,7 @@ from veilleur.api.routes import api_router
 from veilleur.config import Settings, get_settings
 from veilleur.db.session import get_session, get_session_factory
 from veilleur.feeds import feeds_public_router
-from veilleur.pipeline import ScrapeOutcome, run_scrape
+from veilleur.pipeline import ScrapeOutcome, recover_stale_runs, run_scrape
 from veilleur.scheduler import SchedulerLoop
 from veilleur.scraper import PassePartoutClient, validate_raw_html_dir
 from veilleur.web import STATIC_DIR, STATIC_PATH, login_router, web_router
@@ -153,6 +153,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         # Fail fast on a misconfigured directory rather than discovering it
         # mid-scrape and silently dropping HTML payloads.
         validate_raw_html_dir(settings.RAW_HTML_DIR)
+    # Scrapes run as in-process tasks, so any run still 'running' at boot was
+    # orphaned by the previous process exiting and would wedge its feed.
+    # Best-effort: a DB that is unreachable at boot must not crash-loop the
+    # app — /healthz reports degraded and the scheduler retries later.
+    try:
+        await recover_stale_runs(get_session_factory())
+    except Exception:
+        logger.exception("startup orphaned-run recovery failed")
     scheduler: SchedulerLoop | None = None
     owned: list[object] = []
     if settings.SCHEDULER_ENABLED:

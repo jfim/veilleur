@@ -6,6 +6,11 @@ one scrape executes at a time process-wide, to keep load on a single
 shared passe-partout instance bounded.
 """
 
-from veilleur.pipeline.scrape import ScrapeOutcome, run_scrape
+from veilleur.pipeline.scrape import (
+    STALE_RUN_TIMEOUT,
+    ScrapeOutcome,
+    recover_stale_runs,
+    run_scrape,
+)
 
-__all__ = ["ScrapeOutcome", "run_scrape"]
+__all__ = ["STALE_RUN_TIMEOUT", "ScrapeOutcome", "recover_stale_runs", "run_scrape"]

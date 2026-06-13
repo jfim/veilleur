@@ -26,9 +26,9 @@ import asyncio
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
@@ -88,6 +88,55 @@ async def _set_step(
         assert run is not None
         run.current_step = step
         await session.commit()
+
+
+STALE_RUN_TIMEOUT = timedelta(minutes=15)
+
+
+async def recover_stale_runs(
+    factory: async_sessionmaker[AsyncSession],
+    *,
+    older_than: timedelta | None = None,
+) -> int:
+    """Mark orphaned ``running`` scrape runs as ``failed``; return the count.
+
+    A scrape executes as an in-process task (FastAPI ``BackgroundTasks`` for
+    manual actions, the scheduler loop for due feeds), so it cannot survive
+    the process that started it. Any run left ``running`` after that process
+    is gone will never finish on its own and wedges the feed: the UI shows it
+    perpetually in-flight and ``_queue_scrape`` refuses to start a replacement.
+
+    ``older_than=None`` resets every running run — intended for startup, when
+    nothing can legitimately be in flight yet (the app runs as a single
+    process with an in-process scheduler). A ``timedelta`` restricts the reset
+    to runs that started before the cutoff, leaving genuinely in-flight runs
+    untouched — intended for the periodic staleness sweep.
+    """
+    conditions = [ScrapeRun.status == "running"]
+    if older_than is None:
+        reason = "run aborted: interrupted by a restart"
+    else:
+        reason = f"run aborted: exceeded maximum duration ({older_than})"
+        conditions.append(ScrapeRun.started_at < datetime.now(UTC) - older_than)
+
+    stmt = (
+        update(ScrapeRun)
+        .where(*conditions)
+        .values(
+            status="failed",
+            finished_at=datetime.now(UTC),
+            current_step=None,
+            error_message=reason,
+        )
+        .returning(ScrapeRun.id)
+    )
+    async with factory() as session:
+        result = await session.execute(stmt)
+        await session.commit()
+    count = len(result.scalars().all())
+    if count:
+        logger.warning("recovered %d orphaned scrape run(s): %s", count, reason)
+    return count
 
 
 @dataclass(frozen=True, slots=True)
